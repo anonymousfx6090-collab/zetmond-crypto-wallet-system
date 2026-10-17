@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.next/
+.npm-cache/
+.pnpm-store/
+test-results/
+playwright-report/
+.preview/
+*.log
