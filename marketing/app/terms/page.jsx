@@ -2,7 +2,7 @@ import PolicyPage from '../../components/PolicyPage';
 
 export const metadata = {
   title: 'Terms — draft',
-  description: 'Draft terms placeholder for the Zetmond marketing prototype. Live-service terms have not been approved.',
+  description: 'Draft terms placeholder for the Zetmond marketing site. Live-service terms have not been approved.',
 };
 
 export default function TermsPage() {
@@ -14,7 +14,7 @@ export default function TermsPage() {
       <p>The intended product is a custodial USDT wallet with fixed-rate P2P trading. Approved identity verification is required before wallet or trading use. The Vault coordinates the seller’s USDT funding and buyer’s fiat funding, then tracks delivery to each recipient.</p>
       <p>The public product explanation does not establish country eligibility, provider approval, network support, or a guaranteed launch date.</p>
       <h2>Illustrations and fee examples</h2>
-      <p>The example rate of ₦1,300 per USDT is demonstration data. It is not a live rate or offer. The example slider range does not define approved trade limits.</p>
+      <p>The example rate of ₦1,300 per USDT is illustration data. It is not a live rate or offer. The example slider range does not define approved trade limits.</p>
       <p>Each party’s 0.5% platform fee is a confirmed product rule. Other charges and policies remain partly unresolved. See the Vault & fee rules for the distinction between agreed rules and open decisions.</p>
       <h2>Terms still to be approved</h2>
       <ul>

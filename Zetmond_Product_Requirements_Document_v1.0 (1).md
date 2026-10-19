@@ -3,7 +3,7 @@
 **Version:** 1.0  
 **Prepared:** 19 October 2026  
 **Status:** Product definition for review; confirmed rules plus explicitly identified open decisions  
-**Current delivery:** Responsive web prototype with simulated funds and integrations  
+**Current delivery:** Responsive web product experience with illustrative funds and integrations  
 **Long-term product:** Custodial USDT wallet and P2P marketplace with two-sided Vault settlement  
 **Audience:** Product owner, implementation collaborators, designers, testers, and future operations team
 
@@ -28,7 +28,7 @@
 15. [Activity, notifications, and support](#15-activity-notifications-and-support)
 16. [Logical records and system boundaries](#16-logical-records-and-system-boundaries)
 17. [Security, reliability, and quality requirements](#17-security-reliability-and-quality-requirements)
-18. [Prototype specification](#18-prototype-specification)
+18. [product experience specification](#18-product experience-specification)
 19. [Acceptance scenarios](#19-acceptance-scenarios)
 20. [Delivery sequence and readiness gates](#20-delivery-sequence-and-readiness-gates)
 21. [Measures of success](#21-measures-of-success)
@@ -48,7 +48,7 @@ The product owner requested that unresolved decisions not be silently assumed. T
 
 Requirement IDs identify functional areas and acceptance checks. Conceptual record names and status names are descriptive; they do not commit the project to a framework, database, schema, or API.
 
-For a blocked decision, the prototype should show an explicit placeholder or unavailable action. A test fixture may exercise a scenario, but must be identified as demonstration data rather than published policy. No new production business rule should be inferred from an arbitrary demo value.
+For a blocked decision, the product experience should show an explicit placeholder or unavailable action. A test fixture may exercise a scenario, but must be identified as illustration data rather than published policy. No new production business rule should be inferred from an arbitrary sample value.
 
 ## 2. Product definition and goals
 
@@ -85,7 +85,7 @@ This does not mean all financial risk disappears. Delayed payments, incorrect tr
 - Assets other than USDT.
 - User-managed recovery phrases or self-custody.
 - Price negotiation as part of the fixed-rate order flow.
-- Real customer money, real private keys, live KYC documents, or live bank payouts in the prototype.
+- Real customer money, real private keys, live KYC documents, or live bank payouts in the product experience.
 - Unconfirmed extras such as staking, lending, leverage, swaps, cards, referrals, or business accounts.
 
 ## 3. Confirmed decision register
@@ -116,7 +116,7 @@ This does not mean all financial risk disappears. Delayed payments, incorrect tr
 | D22 | One admin role initially; admin access is not public registration. |
 | D23 | Current delivery is responsive web, including desktop, tablet, phone, and intermediate widths. |
 | D24 | Existing user-app colours and overall structure stay; the marketing site has a separate layout. |
-| D25 | The prototype simulates integrations and funds. |
+| D25 | The product experience simulates integrations and funds. |
 | D26 | No target delivery date has been set. |
 
 **Country distinction:** choosing a display currency is not the same as enabling P2P settlement in that country. The Africa focus is confirmed; the first supported settlement markets are not.
@@ -127,7 +127,7 @@ This does not mean all financial risk disappears. Delayed payments, incorrect tr
 
 **Confirmed:** A separate landing experience, not the authenticated dashboard layout. It introduces the wallet, Vault, and P2P product and routes visitors to customer login or account creation.
 
-**Proposed content:** product explanation, how the Vault works, fee examples, FAQs, support links, and policy links. Supported countries and payment methods must reflect approved capability rather than the presence of a flag or currency selector. Prototype calls to action must make the demo status clear.
+**Proposed content:** product explanation, how the Vault works, fee examples, FAQs, support links, and policy links. Supported countries and payment methods must reflect approved capability rather than the presence of a flag or currency selector. product experience calls to action must make the sample status clear.
 
 ### 4.2 User application
 
@@ -147,16 +147,16 @@ Advertiser functions belong within P2P. Subpages, drawers, and flow steps do not
 
 A separate administrative login and management interface. One admin role handles the initial operational scope. The backend must distinguish customer and admin permissions; a different URL is not sufficient access control.
 
-### 4.4 Prototype versus live product
+### 4.4 product experience versus live product
 
-| Area | Prototype | Intended live product |
+| Area | product experience | Intended live product |
 |---|---|---|
-| Accounts | Demo accounts and simulated verification flows | Authenticated accounts with implemented recovery and security controls |
-| KYC | Fictional data and simulated review outcomes | Approved provider/process, jurisdiction-specific requirements TBD |
-| Crypto | Simulated USDT balances, deposits, transfers, and confirmations | Custody and supported-network integration, design TBD |
-| Fiat | Simulated unique account details, receipts, and payouts | Eligible banking/payment partners and confirmed account capabilities |
+| Accounts | sample accounts and illustrative verification flows | Authenticated accounts with implemented recovery and security controls |
+| KYC | Fictional data and illustrative review outcomes | Approved provider/process, jurisdiction-specific requirements TBD |
+| Crypto | Illustrative USDT balances, deposits, transfers, and confirmations | Custody and supported-network integration, design TBD |
+| Fiat | Illustrative unique account details, receipts, and payouts | Eligible banking/payment partners and confirmed account capabilities |
 | Fees | Agreed P2P fee calculation; unknown fees visibly TBD | Fully approved, disclosed fee and rounding policy |
-| Operations | Simulated admin review, failed payout, and refund scenarios | Operational procedures, reconciliation, monitoring, and escalation |
+| Operations | Illustrative admin review, failed payout, and refund scenarios | Operational procedures, reconciliation, monitoring, and escalation |
 
 Monnify is the requested candidate for the naira payment flow. No eligibility or live integration approval has been confirmed. Do not infer support for other African currencies from that preference. Live provider selection and country coverage are open decisions.
 
@@ -191,7 +191,7 @@ The exact onboarding field set, identity documents, verification provider, and e
 
 ### 6.2 External USDT deposit or withdrawal
 
-**Receive:** Open Receive USDT, view the supported network and Zetmond address, read the applicable charge disclosure, and track a simulated or live deposit through confirmation to credit.
+**Receive:** Open Receive USDT, view the supported network and Zetmond address, read the applicable charge disclosure, and track a illustrative or live deposit through confirmation to credit.
 
 **Send:** Enter a destination on the supported network, specify an amount, review applicable charges and recipient amount, authorise, and track the transfer result. Production confirmation counts, address rules, withdrawal limits, network, and fee amounts are TBD.
 
@@ -216,7 +216,7 @@ The exact onboarding field set, identity documents, verification provider, and e
 4. Following the approved eligibility process, create and manage offers.
 5. See current category/level, benefits, and progress toward further eligibility.
 
-Until numeric criteria are agreed, the prototype must label the relevant requirements as TBD or use explicitly labelled demo eligibility. It must not claim a real user has earned a tier using invented thresholds.
+Until numeric criteria are agreed, the product experience must label the relevant requirements as TBD or use explicitly labelled sample eligibility. It must not claim a real user has earned a tier using invented thresholds.
 
 ## 7. Accounts, KYC, and country settings
 
@@ -298,7 +298,7 @@ The structure was selected by reference to Bybit. This does **not** automaticall
 - Show required amount, deposited amount, locked status, and any release request status once policy is defined.
 - Do not use locked advertiser collateral as freely available trading funds.
 - Deposit amount by category, waiver rules, funding charges, release conditions, and any deduction/forfeiture authority are TBD.
-- Seed demo advertisers for prototype testing; do not silently waive live rules to solve the initial marketplace supply problem.
+- Seed sample advertisers for product experience testing; do not silently waive live rules to solve the initial marketplace supply problem.
 
 ## 10. Trade agreement, invoices, and charges
 
@@ -461,7 +461,7 @@ The following inventory expands the approved three-surface structure. “New” 
 |---|---|---|
 | PUB-01 | Landing page | Explain Zetmond, USDT wallet, Vault, fees, and product access; distinct marketing layout |
 | PUB-02 | How it works / FAQs | Explain funding, timers, settlement, and refunds; may be landing-page sections |
-| PUB-03 | Terms of service | Host approved terms; prototype placeholder must be identified |
+| PUB-03 | Terms of service | Host approved terms; product experience placeholder must be identified |
 | PUB-04 | Privacy notice | Explain approved data handling once established |
 | PUB-05 | Vault/P2P and fee policies | Explain actual trade and refund rules; unknown policy stays marked TBD |
 
@@ -477,7 +477,7 @@ The following inventory expands the approved three-surface structure. “New” 
 | AUTH-06 | Forgot/reset password | Recovery request, reset, success/error states |
 | ONB-01 | Country and currency setup | Registration country and associated display currency |
 | ONB-02 | Identity details | Fields determined by the approved KYC process |
-| ONB-03 | Identity evidence submission | Document/selfie requirements TBD; synthetic evidence only in prototype |
+| ONB-03 | Identity evidence submission | Document/selfie requirements TBD; synthetic evidence only in product experience |
 | ONB-04 | Verification status | Pending, approved, rejected, explanation, and resubmission |
 
 ### 12.3 Wallet and activity
@@ -551,7 +551,7 @@ Buyer and seller views can share one page structure, with role-specific instruct
 | ADM-UI-01 | Admin login | Separate access; authentication policy to be finalised |
 | ADM-UI-02 | Admin dashboard | Operational queues and exceptions |
 | ADM-UI-03 | Users and user detail | Account/KYC status, associated activity, permitted actions |
-| ADM-UI-04 | KYC queue/review | Synthetic review in prototype; live process TBD |
+| ADM-UI-04 | KYC queue/review | Synthetic review in product experience; live process TBD |
 | ADM-UI-05 | Advertiser applications/review | Category application and requirement checks |
 | ADM-UI-06 | Advertiser detail/tier/deposit | Tier and collateral status; action policy TBD |
 | ADM-UI-07 | All trades/trade detail | Agreement, deposits, deadlines, payouts, refunds, event history |
@@ -612,7 +612,7 @@ Exact breakpoints, accessibility conformance target, browser support, and perfor
 | ID | Operational requirement |
 |---|---|
 | ADM-01 | View users, verification state, and linked relevant records. |
-| ADM-02 | Review simulated KYC and advertiser applications against configured rules. |
+| ADM-02 | Review illustrative KYC and advertiser applications against configured rules. |
 | ADM-03 | Inspect the complete trade timeline, original invoice, and deadline evidence. |
 | ADM-04 | See each deposit, payout, and refund independently. |
 | ADM-05 | Investigate uncertain or late payments without marking them successful solely from user-uploaded proof. |
@@ -620,7 +620,7 @@ Exact breakpoints, accessibility conformance target, browser support, and perfor
 | ADM-07 | Review support cases and communicate a recorded outcome. |
 | ADM-08 | See platform fees by asset/currency, separating pending/refundable amounts from collected amounts. |
 | ADM-09 | Audit sensitive changes and actions; retain original history rather than overwriting it. |
-| ADM-10 | Separate demo controls from ordinary customer functionality. |
+| ADM-10 | Separate sample controls from ordinary customer functionality. |
 
 No unrestricted “edit balance”, “release anyway”, or “mark paid” action is approved. Operational correction must preserve traceable financial records and respect completed obligations. Suspension powers, exception approval limits, automatic refund authority, and admin provisioning are open decisions.
 
@@ -679,19 +679,19 @@ Support response targets, appeals, evidence limits, dispute liability, and final
 | User app | User-facing forms, balances, offers, trade progress, settings, and support |
 | Admin portal | Authorised review, exception handling, and audit visibility |
 | Shared backend | Authentication, permissions, exact calculations, state, deadlines, records, and orchestration |
-| Crypto adapter | Simulated now; live custody/network events and sends later |
-| Fiat adapter | Simulated now; eligible live collection, verification, payout, and refunds later |
-| Verification adapter | Simulated now; approved live KYC/contact checks later |
+| Crypto adapter | Illustrative now; live custody/network events and sends later |
+| Fiat adapter | Illustrative now; eligible live collection, verification, payout, and refunds later |
+| Verification adapter | Illustrative now; approved live KYC/contact checks later |
 
 Independent interfaces must use consistent backend facts. Neither the marketing site nor the customer app can declare itself an admin or override a payment state.
 
 ## 17. Security, reliability, and quality requirements
 
-These are derived engineering safeguards or proposed launch gates, not claims that the prototype provides production-grade custody.
+These are derived engineering safeguards or proposed launch gates, not claims that the product experience provides production-grade custody.
 
 - Enforce authentication, object ownership, KYC gating, and admin authorisation on the server.
 - Validate financial amounts, destinations, and state transitions independently of disabled UI buttons.
-- Keep live keys and provider secrets out of browser code and logs; no live keys are used in the prototype.
+- Keep live keys and provider secrets out of browser code and logs; no live keys are used in the product experience.
 - Verify live payment events using the eventual provider's supported authenticity and transaction-verification mechanisms.
 - Make event processing and monetary actions idempotent: repeated requests or notifications do not move funds twice.
 - Reconcile records with external payment/custody evidence; investigate unknown or conflicting movements.
@@ -705,30 +705,30 @@ These are derived engineering safeguards or proposed launch gates, not claims th
 
 Country-specific licensing, customer eligibility, privacy retention, screening, and required disclosures need specialist confirmation for the actual launch scope. No regulatory approval or legal conclusion is asserted in this PRD.
 
-## 18. Prototype specification
+## 18. product experience specification
 
 ### 18.1 Purpose
 
-Demonstrate the complete intended user experience and exercise the confirmed financial rules without real money. The prototype should be functional enough to test buyer, seller, and admin perspectives, rather than a set of disconnected static screenshots.
+Explain the complete intended user experience and exercise the confirmed financial rules without real money. The product experience should be functional enough to test buyer, seller, and admin perspectives, rather than a set of disconnected static screenshots.
 
-### 18.2 Simulation requirements
+### 18.2 Illustration requirements
 
-- Clearly label the product environment and balances as demonstration/simulated.
+- Clearly label the product environment and balances as illustration/illustrative.
 - Use fictional users, bank details, KYC evidence, and mock addresses that cannot be mistaken for real funding instructions.
 - Provide buyer, seller, and admin test sessions so the same trade can be observed from each role.
 - Simulate correct funding, no funding, wrong fiat amount, pending payment, payout failure, refund failure, and late payment.
-- Preserve state across page navigation and refresh within the prototype's chosen persistence model; that model remains TBD.
+- Preserve state across page navigation and refresh within the product experience's chosen persistence model; that model remains TBD.
 - Calculate the agreed P2P 0.5% fees using exact decimal arithmetic.
 - Keep unapproved advertiser criteria and external-transfer fees visibly unresolved.
-- Provide demo-only controls for advancing time and producing payment events. These must not be customer controls in the live product.
-- Use the actual 20-minute/15-minute rules; an accelerated demo clock must say it is accelerated rather than silently changing policy.
-- Permit safe demo reset without connecting to live services.
+- Provide sample-only controls for advancing time and producing payment events. These must not be customer controls in the live product.
+- Use the actual 20-minute/15-minute rules; an accelerated sample clock must say it is accelerated rather than silently changing policy.
+- Permit safe sample reset without connecting to live services.
 
-### 18.3 Prototype coverage
+### 18.3 product experience coverage
 
-The full page inventory defines the product scope. A proposed first implementation slice is: shared user-app layout, demo login/KYC gating, wallet overview, marketplace, invoice/acceptance, both-role Vault views, activity/receipt, and a small admin exception view. Other pages follow in the sequence in Section 20; they are not removed from the complete product definition.
+The full page inventory defines the product scope. A proposed first implementation slice is: shared user-app layout, sample login/KYC gating, wallet overview, marketplace, invoice/acceptance, both-role Vault views, activity/receipt, and a small admin exception view. Other pages follow in the sequence in Section 20; they are not removed from the complete product definition.
 
-Native apps and live integration are not part of this prototype. A successful demo is not evidence that production custody, settlement eligibility, or regulatory readiness has been established.
+Native apps and live integration are not part of this product experience. A successful sample is not evidence that production custody, settlement eligibility, or regulatory readiness has been established.
 
 ## 19. Acceptance scenarios
 
@@ -762,10 +762,10 @@ All monetary examples are fixtures. Open-policy-dependent checks cannot be signe
 | AC-24 | Customer tries another user's trade or admin operation | Access denied without exposing private data |
 | AC-25 | P2P buyer supplies external wallet as recipient | Reject; P2P receipt must use buyer's Zetmond wallet |
 | AC-26 | User sends to external wallet outside P2P | Use wallet transfer flow under approved network/fee policy; not blocked merely by P2P-only restriction |
-| AC-27 | Tier requirements have no approved numeric values | Show TBD/demo status, not fabricated live qualification |
+| AC-27 | Tier requirements have no approved numeric values | Show TBD/sample status, not fabricated live qualification |
 | AC-28 | Two orders compete for same available funds | Prevent over-allocation and double spending |
 | AC-29 | Customer uses phone/tablet/desktop widths | Core flows usable; exact amounts and primary actions not clipped |
-| AC-30 | Mock event controls used | Clearly demo-only; no live transfer or identity submission occurs |
+| AC-30 | Mock event controls used | Clearly sample-only; no live transfer or identity submission occurs |
 | AC-31 | An unavailable country/currency is selected for P2P | Show unavailable settlement capability even if local estimate can be displayed |
 | AC-32 | A receipt is downloaded before both payouts complete | It reflects actual partial/pending state; never asserts full trade completion |
 
@@ -789,14 +789,14 @@ This sequence is **proposed**; no dates, budget, team capacity, or framework are
 | Stage | Deliverable | Exit condition |
 |---|---|---|
 | 1. Product and design alignment | Review this PRD, confirm blockers, obtain source assets where possible | Confirmed rules separated from TBD; shared visual direction understood |
-| 2. Web foundation | Chosen stack, shared shell/components, customer/admin separation, demo accounts | Responsive navigation and basic role boundaries work |
-| 3. Core trade prototype | Marketplace, fixed-rate invoice, both-role Vault funding, fees and timers | Core successful and cancelled trade scenarios pass |
+| 2. Web foundation | Chosen stack, shared shell/components, customer/admin separation, sample accounts | Responsive navigation and basic role boundaries work |
+| 3. Core trade product experience | Marketplace, fixed-rate invoice, both-role Vault funding, fees and timers | Core successful and cancelled trade scenarios pass |
 | 4. Recovery and operations | Payment review, payout/refund exceptions, activity, admin queues | Duplicate/pending/late/failure scenarios are traceable |
-| 5. Complete user journeys | Onboarding/KYC simulation, wallet transfers, advertisers, settings/support, marketing site | Page inventory implemented or explicitly phased with owner agreement |
-| 6. Prototype review | Responsive and functional validation | Owner can walk through buyer, seller, and admin flows; limitations visible |
+| 5. Complete user journeys | Onboarding/KYC illustration, wallet transfers, advertisers, settings/support, marketing site | Page inventory implemented or explicitly phased with owner agreement |
+| 6. product experience review | Responsive and functional validation | Owner can walk through buyer, seller, and admin flows; limitations visible |
 | 7. Live-product planning | Country/provider/custody decisions, external fees, legal/security work, operating procedures | All real-money blockers resolved before a live pilot |
 
-The first code delivery should preserve the screenshot design rather than replace it with an unrelated template. Deployment method, private/public prototype access, domains, and local-versus-hosted workflow require a decision before deployment.
+The first code delivery should preserve the screenshot design rather than replace it with an unrelated template. Deployment method, private/public product experience access, domains, and local-versus-hosted workflow require a decision before deployment.
 
 ## 21. Measures of success
 
@@ -804,7 +804,7 @@ The following measures are **proposed**, with no numeric commercial targets appr
 
 | Measure | Definition or purpose |
 |---|---|
-| Prototype scenario coverage | Agreed acceptance scenarios demonstrated successfully |
+| product experience scenario coverage | Agreed acceptance scenarios complete |
 | Invoice comprehension | Test users can identify principal, fee, total deposit, and expected receipt |
 | KYC funnel | Submitted/approved/rejected verification journeys and drop-off points |
 | Funding completion | Accepted orders reaching both deposits, separated from unfunded expiry |
@@ -824,8 +824,8 @@ These items are deliberately unresolved. “TBD” is not a default of zero, unl
 
 | ID | Decision needed | Why it matters | Blocking scope |
 |---|---|---|---|
-| O01 | Exact registration countries and supported P2P fiat markets | Display currency and settlement capability differ | Country-specific live launch; prototype menu content |
-| O02 | USDT network(s) | Address validation, confirmation, fees, and recovery depend on it | Live wallet; network-specific prototype copy |
+| O01 | Exact registration countries and supported P2P fiat markets | Display currency and settlement capability differ | Country-specific live launch; product experience menu content |
+| O02 | USDT network(s) | Address validation, confirmation, fees, and recovery depend on it | Live wallet; network-specific product experience copy |
 | O03 | Custody/address design and Vault transfer mechanism | Defines key control, address issuance, internal movement, and costs | Live crypto |
 | O04 | External receipt charges and external withdrawal fees | User confirmed charging for receipts without setting prices | Wallet fee quotations |
 | O05 | Display FX source, refresh, stale handling, country/currency edits | Prevents misleading estimates and unsupported currency changes | Valuation/settings |
@@ -852,9 +852,9 @@ These items are deliberately unresolved. “TBD” is not a default of zero, unl
 | O26 | Domains, deployment access and publication approval | Three separate surfaces are agreed, actual hosting is not | Deployment |
 | O27 | Source fonts/assets/design tokens, responsive details | Screenshots establish appearance but not exact source values | Visual implementation fidelity |
 | O28 | Performance/accessibility/browser targets, backups, retention, incident procedures | Production quality and operating thresholds require agreement | Live readiness |
-| O29 | Budget, expected users and delivery schedule | No target date was given; no capacity assumptions should be invented | Planning, not initial prototype specification |
+| O29 | Budget, expected users and delivery schedule | No target date was given; no capacity assumptions should be invented | Planning, not initial product experience specification |
 
-For the next product discussion, prioritise O01–O04, O08–O11, O15–O16, and O25. Other uncertain scenarios can be represented as clearly labelled prototype review states while policy is resolved.
+For the next product discussion, prioritise O01–O04, O08–O11, O15–O16, and O25. Other uncertain scenarios can be represented as clearly labelled product experience review states while policy is resolved.
 
 ## 23. Reference material and glossary
 
@@ -898,4 +898,4 @@ Advertiser category names were selected using Bybit as a reference in the discus
 
 ---
 
-**End of PRD v1.0.** Confirmed rules are ready for review and prototype implementation. Proposed controls and TBD policies require the product owner's decisions before they become live product commitments.
+**End of PRD v1.0.** Confirmed rules are ready for review and product experience implementation. Proposed controls and TBD policies require the product owner's decisions before they become live product commitments.

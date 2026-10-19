@@ -29,18 +29,15 @@ test('Vault walkthrough supports mouse and keyboard navigation', async ({ page }
   await expect(first).toHaveAttribute('aria-selected', 'true');
 });
 
-test('FAQ and preview dialog work, and dialog returns keyboard focus', async ({ page }) => {
+test('product FAQ works and account actions stay unlinked until the web app is connected', async ({ page }) => {
   await page.goto('/');
-  await page.getByText('Can I use real money here?', { exact: true }).click();
-  await expect(page.locator('details[open]')).toContainText('No. This is a marketing preview');
-  const opener = page.getByRole('button', { name: 'Meet your wallet' });
-  await opener.click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText('Registration, login, and the customer wallet');
-  await page.keyboard.press('Escape');
-  await expect(dialog).not.toBeVisible();
-  await expect(opener).toBeFocused();
+  await page.getByText('Do both sides have to fund a trade?', { exact: true }).click();
+  await expect(page.locator('details[open]')).toContainText('Either party can fund first');
+  await expect(page.locator('body')).not.toContainText(/prototype|simulation|simulated|marketing preview|TBD|we’re building/i);
+  for (const button of await page.getByRole('button', { name: /Get started|Log in|Create an account/, includeHidden: true }).all()) {
+    await expect(button).toBeDisabled();
+  }
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
 test('narrow layouts stay within the viewport and mobile navigation works', async ({ page }) => {
@@ -57,13 +54,17 @@ test('narrow layouts stay within the viewport and mobile navigation works', asyn
   await menu.getByRole('link', { name: 'Fees', exact: true }).click();
   await expect(menu).not.toBeVisible();
   await expect(page).toHaveURL(/#fees$/);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.screenshot({ path: '.preview/mobile-product.png', fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: '.preview/desktop-product.png', fullPage: true });
 });
 
 test('policy routes load directly with accurate labels and return links', async ({ page }) => {
   for (const [route, title] of [['/terms', 'Terms of service'], ['/privacy', 'Privacy notice'], ['/vault-policy', 'The Vault, explained.']]) {
     await page.goto(route);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(title);
-    if (route !== '/vault-policy') await expect(page.getByText(/Draft placeholder for prototype review/)).toBeVisible();
+    if (route !== '/vault-policy') await expect(page.getByText(/Draft placeholder for review/)).toBeVisible();
     await page.getByRole('link', { name: 'Back to Zetmond', exact: true }).click();
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Your USDT.');
   }
