@@ -43,7 +43,8 @@ test('product FAQ works and account actions stay unlinked until the web app is c
 test('narrow layouts stay within the viewport and mobile navigation works', async ({ page }) => {
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Your USDT.');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
     expect(overflow, `Page overflows at ${width}px`).toBe(false);
   }
@@ -51,12 +52,36 @@ test('narrow layouts stay within the viewport and mobile navigation works', asyn
   await page.getByRole('button', { name: 'Open menu' }).click();
   const menu = page.getByRole('navigation', { name: 'Mobile navigation' });
   await expect(menu).toBeVisible();
-  await menu.getByRole('link', { name: 'Fees', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Site menu' });
+  await expect(dialog.getByRole('button', { name: 'Close menu' })).toBeFocused();
+  await expect(page.locator('.site-page')).toHaveAttribute('inert', '');
+  await expect.poll(() => page.locator('.site-page').evaluate(element => Math.round(element.getBoundingClientRect().left))).toBe(-195);
+  expect((await dialog.boundingBox()).height).toBe(844);
+  await menu.getByRole('link', { name: /FAQs/ }).focus();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('link', { name: 'Zetmond home' })).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(menu.getByRole('link', { name: /FAQs/ })).toBeFocused();
+  await page.screenshot({ path: '.preview/mobile-menu-open.png' });
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open menu' })).toBeFocused();
+  await expect(page.locator('.site-page')).not.toHaveAttribute('inert', '');
+  await page.getByRole('button', { name: 'Open menu' }).click();
+  await page.locator('.mobile-menu-backdrop').click({ position: { x: 15, y: 150 } });
+  await expect(dialog).not.toBeVisible();
+  await page.getByRole('button', { name: 'Open menu' }).click();
+  await menu.getByRole('link', { name: /Fees/ }).click();
   await expect(menu).not.toBeVisible();
   await expect(page).toHaveURL(/#fees$/);
+  await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
   await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo({ top: 0, behavior: 'instant' }); });
   await page.screenshot({ path: '.preview/mobile-product.png', fullPage: true });
+  await page.getByRole('button', { name: 'Open menu' }).click();
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
   await page.screenshot({ path: '.preview/desktop-product.png', fullPage: true });
 });
 

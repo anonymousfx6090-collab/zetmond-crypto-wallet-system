@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowDownRight, ArrowUpRight, Menu, X } from 'lucide-react';
 
-export function Brand({ footer = false }) {
+export function Brand({ footer = false, onClick }) {
   return (
-    <Link href="/" aria-label="Zetmond home" className="brand inline-flex shrink-0 items-center gap-2.5">
+    <Link href="/" onClick={onClick} aria-label="Zetmond home" className="brand inline-flex shrink-0 items-center gap-2.5">
       <span className="brand-symbol" aria-hidden="true"><img src="/zetmond-logo.png" alt="" width="2200" height="800" /></span>
       <span className={`font-display font-bold tracking-[-.055em] text-white ${footer ? 'text-[29px]' : 'text-[26px] sm:text-[29px]'}`}>Zetmond</span>
     </Link>
@@ -18,21 +18,43 @@ export default function SiteShell({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
   const menuButton = useRef(null);
+  const drawer = useRef(null);
+  const closeButton = useRef(null);
+  const closeMenu = () => setMenuOpen(false);
   useEffect(() => { setMenuOpen(false); }, [pathname]);
   useEffect(() => {
     if (!menuOpen) return;
-    const closeOnEscape = event => {
-      if (event.key === 'Escape') { setMenuOpen(false); menuButton.current?.focus(); }
+    const bodyOverflow = document.body.style.overflow;
+    const rootOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    closeButton.current?.focus({ preventScroll: true });
+    const handleKeys = event => {
+      if (event.key === 'Escape') { event.preventDefault(); setMenuOpen(false); }
+      if (event.key !== 'Tab') return;
+      const focusable = drawer.current?.querySelectorAll('a[href], button:not(:disabled)');
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     };
     const closeOnWideScreen = () => { if (window.innerWidth >= 1024) setMenuOpen(false); };
-    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('keydown', handleKeys);
     window.addEventListener('resize', closeOnWideScreen);
-    return () => { document.removeEventListener('keydown', closeOnEscape); window.removeEventListener('resize', closeOnWideScreen); };
+    return () => {
+      document.removeEventListener('keydown', handleKeys);
+      window.removeEventListener('resize', closeOnWideScreen);
+      document.body.style.overflow = bodyOverflow;
+      document.documentElement.style.overflow = rootOverflow;
+      if (window.innerWidth < 1024) menuButton.current?.focus({ preventScroll: true });
+    };
   }, [menuOpen]);
   const navigation = [['Wallet', '/#wallet'], ['The Vault', '/#how-it-works'], ['Fees', '/#fees'], ['FAQs', '/#faq']];
 
   return (
-    <>
+    <div className="site-shell" data-menu-open={menuOpen}>
+      <div className="site-page" inert={menuOpen}>
       <a href="#main" className="skip-link">Skip to content</a>
       <header className="sticky top-0 z-40 border-b border-white/8 bg-paper/90 backdrop-blur-xl">
         <div className="page-width flex h-20 items-center justify-between gap-5">
@@ -44,12 +66,8 @@ export default function SiteShell({ children }) {
             <button className="nav-link" type="button" disabled>Log in</button>
             <button className="button button-primary !min-h-11 !px-5 !text-[13px]" type="button" disabled>Get started <ArrowUpRight size={16} /></button>
           </div>
-          <button ref={menuButton} className="grid size-11 place-items-center rounded-lg border border-white/15 bg-white/3 transition hover:bg-purple/10 lg:hidden" aria-expanded={menuOpen} aria-controls="mobile-navigation" aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen(!menuOpen)} type="button">{menuOpen ? <X size={22} /> : <Menu size={22} />}</button>
+          <button ref={menuButton} className="grid size-11 place-items-center rounded-lg border border-white/15 bg-white/3 transition hover:bg-purple/10 lg:hidden" aria-expanded={menuOpen} aria-controls="mobile-menu" aria-haspopup="dialog" aria-label="Open menu" onClick={() => setMenuOpen(true)} type="button"><Menu size={22} /></button>
         </div>
-        <nav id="mobile-navigation" aria-label="Mobile navigation" hidden={!menuOpen} className="border-t border-white/8 bg-paper px-6 pb-6 lg:hidden">
-          <div className="flex flex-col">{navigation.map(([label, href]) => <Link key={href} href={href} onClick={() => setMenuOpen(false)} className="flex items-center justify-between border-b border-white/8 py-4 text-sm font-medium">{label}<ArrowUpRight size={16} className="text-muted" /></Link>)}</div>
-          <div className="mt-5 flex gap-3"><button className="button button-outline flex-1" disabled type="button">Log in</button><button className="button button-primary flex-1" disabled type="button">Get started <ArrowUpRight size={16} /></button></div>
-        </nav>
       </header>
       {children}
       <footer className="border-t border-white/8 bg-[#0b0a0f]">
@@ -68,6 +86,22 @@ export default function SiteShell({ children }) {
           <div className="flex flex-col justify-between gap-3 pt-6 text-[11px] leading-5 text-muted sm:flex-row"><p>© 2026 Zetmond.</p><p className="flex items-center gap-2"><ArrowDownRight size={13} className="text-purple" /> Transparent fees. Faster trade flow.</p></div>
         </div>
       </footer>
-    </>
+      </div>
+      <div className="mobile-menu-backdrop" aria-hidden="true" onClick={closeMenu} />
+      <div ref={drawer} id="mobile-menu" role="dialog" aria-modal={menuOpen ? true : undefined} aria-label="Site menu" aria-hidden={!menuOpen} inert={!menuOpen} className="mobile-menu-drawer">
+        <div className="flex items-center justify-between gap-3">
+          <Brand onClick={closeMenu} />
+          <button ref={closeButton} type="button" aria-label="Close menu" onClick={closeMenu} className="grid size-11 shrink-0 place-items-center rounded-full border border-white/15 bg-white/5 text-ink transition hover:bg-purple/15"><X size={21} /></button>
+        </div>
+        <nav aria-label="Mobile navigation" className="mt-12 sm:mt-16">
+          <p className="eyebrow mb-5 text-purple">EXPLORE ZETMOND</p>
+          {navigation.map(([label, href], index) => <Link key={href} href={href} onClick={closeMenu} className="mobile-menu-link group" style={{ '--item-delay': `${100 + index * 55}ms` }}><span className="text-[10px] font-normal tracking-normal text-muted">0{index + 1}</span><span className="flex-1">{label}</span><ArrowUpRight size={22} className="text-purple transition-transform group-hover:translate-x-1 group-hover:-translate-y-1" /></Link>)}
+        </nav>
+        <div className="mt-auto pt-12">
+          <div className="grid gap-3"><button className="button button-primary w-full" disabled type="button">Get started <ArrowUpRight size={18} /></button><button className="button button-outline w-full" disabled type="button">Log in</button></div>
+          <p className="mt-8 border-t border-white/10 pt-5 text-xs leading-6 text-muted">Your USDT. Your next move.</p>
+        </div>
+      </div>
+    </div>
   );
 }
