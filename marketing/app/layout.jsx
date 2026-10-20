@@ -1,4 +1,6 @@
 import SiteShell from '../components/SiteShell';
+import ThemeProvider from '../components/ThemeProvider';
+import { themeInitScript } from '../components/theme-init';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/space-grotesk';
 import './globals.css';
@@ -17,9 +19,10 @@ export const viewport = { themeColor: '#0e0d12' };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: themeInitScript }} /></head>
       <body>
-        <SiteShell>{children}</SiteShell>
+        <ThemeProvider><SiteShell>{children}</SiteShell></ThemeProvider>
       </body>
     </html>
   );

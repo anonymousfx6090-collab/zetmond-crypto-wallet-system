@@ -1,0 +1,2 @@
+// Runs in the document head before the first paint; no customer data is stored.
+export const themeInitScript = `(function(){var t='system';try{var s=localStorage.getItem('zetmond-theme');if(['light','dark','system'].includes(s))t=s;}catch(e){}var r=t==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):t;document.documentElement.dataset.theme=r;document.documentElement.dataset.themePreference=t;})();`;

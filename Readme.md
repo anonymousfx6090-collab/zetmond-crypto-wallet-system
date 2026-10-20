@@ -50,8 +50,9 @@ tests/
 ## Included
 
 - Responsive marketing page with the supplied purple brand.
+- Wallet dashboard hero with balance visibility controls and activity/trade views.
+- Light, Dark, and System appearance modes, remembered locally across visits.
 - Interactive three-step Vault explanation with keyboard navigation.
-- Fee illustration using integer arithmetic for exact amounts.
 - Expandable FAQs and mobile navigation.
 - Get started and Log in buttons remain unlinked until the Task 2 web app is connected.
 - Separate Terms, Privacy, and Vault/Fee policy routes.
@@ -74,7 +75,9 @@ pnpm test
 
 On Windows tests use the installed Microsoft Edge if available. Elsewhere,
 install Playwright Chromium with `pnpm exec playwright install chromium`.
-Checks cover exact fee examples, Vault tabs, FAQs, inactive account buttons, responsive
+Checks cover hero wallet controls, Vault tabs, FAQs, inactive account buttons, responsive
 overflow, mobile navigation, policy routes, and the missing-page screen.
+Theme checks cover saved preferences, live system changes, keyboard/mobile controls,
+initial rendering, and browsers with storage disabled.
 
 No public deployment or external service connection is configured.
