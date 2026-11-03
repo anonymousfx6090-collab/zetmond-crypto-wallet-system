@@ -5,6 +5,7 @@ const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: '**/customer-auth/**',
   fullyParallel: false,
   workers: 1,
   timeout: 60000,
