@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
+import AccountShell from "./AccountShell";
+import FormField from "./FormField";
 import {
   ArrowRight,
   Check,
@@ -10,8 +12,11 @@ import {
   LockKeyhole,
   Mail,
   Smartphone,
-  LogOut,
   ChevronLeft,
+  ArrowUpRight,
+  UserRound,
+  Loader2,
+  Globe2,
 } from "lucide-react";
 
 async function api(path, data, method = data === undefined ? "GET" : "POST") {
@@ -51,42 +56,84 @@ function destination(u) {
   );
 }
 const titles = {
-  login: ["Welcome back.", "Sign in to continue to your Zetmond account."],
+  login: ["Welcome back", "Good to see you again. Sign in to your account."],
   register: [
-    "Your next chapter.",
-    "Create your account. Verify your identity before using financial services.",
+    "Your journey starts here",
+    "Create your Zetmond account. We’ll take it one step at a time.",
   ],
   "forgot-password": [
-    "Let’s get you back in.",
-    "We’ll send a secure reset link if an account matches your email.",
+    "Forgot your password?",
+    "Enter your email and we’ll help you get back in.",
   ],
   "reset-password": [
-    "A fresh start.",
-    "Choose a new password to secure your account.",
+    "Set a new password",
+    "Choose a strong password you haven’t used before.",
   ],
   "verify-contacts": [
-    "Make it yours.",
-    "Verify your email and phone before continuing.",
+    "Let’s make it official",
+    "Confirm your email and phone so we know it’s really you.",
   ],
   mfa: [
-    "One more check.",
-    "Enter an authenticator code or an unused recovery code.",
+    "A quick security check",
+    "Enter a code from your authenticator app or an unused recovery code.",
   ],
   "mfa-setup": [
-    "A stronger lock.",
-    "Add an authenticator app to protect your account.",
+    "An extra layer of protection",
+    "Connect your authenticator app to keep your account secure.",
   ],
-  account: ["Your account.", "Your verification progress, all in one place."],
-  security: ["Stay in control.", "Manage your authenticator and password."],
+  account: [
+    "You’re in. Let’s get set up.",
+    "A few simple steps to make your account yours.",
+  ],
+  security: [
+    "Your security, your control",
+    "Manage how you sign in and protect your account.",
+  ],
   sessions: [
-    "Your signed-in devices.",
-    "Review your sessions and revoke access you no longer recognise.",
+    "Keep track of your devices",
+    "See where you’re signed in and manage access.",
   ],
   "admin-access": [
-    "Administrator access.",
-    "Your identity and administrator permissions have been verified.",
+    "Administrator access",
+    "Manage your secure access to Zetmond.",
   ],
 };
+const eyebrows = {
+  login: "YOUR NEXT CHAPTER",
+  register: "WELCOME TO ZETMOND",
+  "forgot-password": "ACCOUNT RECOVERY",
+  "reset-password": "ACCOUNT RECOVERY",
+  "verify-contacts": "VERIFY YOUR CONTACTS",
+  mfa: "PROTECTED ACCESS",
+  "mfa-setup": "ACCOUNT SECURITY",
+  account: "LET’S GET STARTED",
+  security: "PEACE OF MIND",
+  sessions: "ACCOUNT ACCESS",
+  "admin-access": "PROTECTED WORKSPACE",
+};
+function deviceLabel(agent) {
+  const browser = /Edg\//.test(agent)
+    ? "Edge"
+    : /Firefox\//.test(agent)
+      ? "Firefox"
+      : /Chrome\//.test(agent)
+        ? "Chrome"
+        : /Safari\//.test(agent)
+          ? "Safari"
+          : "Browser";
+  const platform = /iPhone|iPad/.test(agent)
+    ? "iOS"
+    : /Android/.test(agent)
+      ? "Android"
+      : /Windows/.test(agent)
+        ? "Windows"
+        : /Macintosh/.test(agent)
+          ? "macOS"
+          : /Linux/.test(agent)
+            ? "Linux"
+            : "Unknown device";
+  return `${browser} on ${platform}`;
+}
 
 export default function AccountApp({ screen }) {
   const router = useRouter();
@@ -176,28 +223,17 @@ export default function AccountApp({ screen }) {
   }
   function field(name, label, options = {}) {
     return (
-      <label className="field" htmlFor={name}>
-        {label}
-        <input
-          id={name}
-          name={name}
-          required={!options.optional}
-          aria-invalid={!!fields[name]}
-          aria-describedby={fields[name] ? `${name}-error` : undefined}
-          {...options}
-        />
-        {fields[name] && (
-          <span className="field-error" id={`${name}-error`}>
-            {fields[name][0]}
-          </span>
-        )}
-      </label>
+      <FormField name={name} label={label} error={fields[name]} {...options} />
     );
   }
   const submit = (label) => (
     <button className="primary" type="submit" disabled={busy || loading}>
       {busy ? "Please wait…" : label}
-      <ArrowRight size={18} aria-hidden="true" />
+      {busy ? (
+        <Loader2 size={18} className="spinner" aria-hidden="true" />
+      ) : (
+        <ArrowRight size={18} aria-hidden="true" />
+      )}
     </button>
   );
   async function login(e) {
@@ -260,572 +296,623 @@ export default function AccountApp({ screen }) {
   }
   const [title, subtitle] = titles[screen];
   return (
-    <div className="auth-layout">
-      <aside className="story">
-        <Link className="brand" href="/login" aria-label="Zetmond sign in">
-          <span className="brand-mark">Z</span>zetmond
-          <span className="brand-dot">.</span>
-        </Link>
-        <div className="story-copy">
-          <p className="eyebrow">YOUR WORLD. MORE CONNECTED.</p>
-          <h2>
-            A little closer
-            <br />
-            to what’s next.
-          </h2>
-          <p>One account. A clearer way to move forward.</p>
-          <div className="orbit" aria-hidden="true">
-            <div className="orbit-center">Z</div>
-            <span className="orbit-pill pill-one">Built around you</span>
-            <span className="orbit-pill pill-two">
-              <ShieldCheck size={16} />
-              Protected access
-            </span>
-          </div>
-        </div>
-        <p className="story-footer">Zetmond · Built for your everyday.</p>
-      </aside>
-      <main className="workspace">
-        <header className="topbar">
-          <Link href="/login" className="mobile-brand">
-            zetmond.
-          </Link>
-          {publicScreen ? (
-            <span>
-              {screen === "register"
-                ? "Already have an account?"
-                : "New to Zetmond?"}{" "}
-              <Link href={screen === "register" ? "/login" : "/register"}>
-                {screen === "register" ? "Sign in" : "Create account"}
-              </Link>
-            </span>
-          ) : (
-            <button className="quiet" onClick={logout} disabled={busy}>
-              <LogOut size={16} /> Sign out
-            </button>
-          )}
-        </header>
+    <AccountShell
+      screen={screen}
+      publicScreen={publicScreen}
+      user={user}
+      busy={busy}
+      logout={logout}
+    >
+      <header className="screen-heading">
+        <p className="eyebrow">{eyebrows[screen]}</p>
+        <h1>{title}</h1>
+        <p className="intro">{subtitle}</p>
+      </header>
+      {loading && <p role="status">Loading your account…</p>}
+      {error && (
         <div
-          className={`content ${["account", "security", "sessions", "verify-contacts"].includes(screen) ? "wide" : ""}`}
+          className="notice error"
+          role="alert"
+          aria-label="Account error"
+          tabIndex={-1}
+          ref={errorRef}
         >
-          {!publicScreen && (
-            <nav className="account-nav" aria-label="Account">
-              <Link href="/account">Account</Link>
-              <Link href="/security">Security</Link>
-              <Link href="/sessions">Devices</Link>
-            </nav>
-          )}
-          <div className="heading-icon">
-            <LockKeyhole size={24} />
+          {error}
+        </div>
+      )}
+      {message && (
+        <div className="notice success" role="status">
+          {message}
+        </div>
+      )}
+      {!loading && screen === "login" && (
+        <form onSubmit={login}>
+          {field("email", "Email address", {
+            type: "email",
+            autoComplete: "username",
+            placeholder: "Enter your email",
+          })}
+          {field("password", "Password", {
+            type: "password",
+            autoComplete: "current-password",
+            maxLength: 128,
+            placeholder: "Enter your password",
+          })}
+          <Link className="inline-link" href="/forgot-password">
+            Forgot password?
+          </Link>
+          {submit("Sign in")}
+          <div className="form-divider">
+            <span>NEW TO ZETMOND?</span>
           </div>
-          <h1>{title}</h1>
-          <p className="intro">{subtitle}</p>
-          {loading && <p role="status">Loading your account…</p>}
-          {error && (
-            <div
-              className="notice error"
-              role="alert"
-              aria-label="Account error"
-              tabIndex={-1}
-              ref={errorRef}
-            >
-              {error}
+          <Link className="secondary secondary-full" href="/register">
+            Create an account
+            <ArrowUpRight size={17} />
+          </Link>
+          <p className="auth-reassurance">
+            <ShieldCheck size={16} aria-hidden="true" /> Your next move starts
+            with secure access.
+          </p>
+        </form>
+      )}
+      {!loading && screen === "register" && (
+        <form onSubmit={register}>
+          {field("email", "Email address", {
+            type: "email",
+            autoComplete: "email",
+            placeholder: "Enter your email",
+          })}
+          <div className="field">
+            <label htmlFor="country">Country of residence</label>
+            <div className="input-wrap">
+              <Globe2 size={18} className="input-icon" aria-hidden="true" />
+              <select
+                id="country"
+                aria-label="Country"
+                name="country"
+                autoComplete="country"
+                required
+                aria-invalid={!!fields.country}
+                aria-describedby={fields.country ? "country-error" : undefined}
+              >
+                <option value="">Select your country</option>
+                {policy?.countries.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.name} · {c.currency}
+                  </option>
+                ))}
+              </select>
             </div>
+            {fields.country && (
+              <span className="field-error" id="country-error">
+                {fields.country[0]}
+              </span>
+            )}
+          </div>
+          {field("phone", "Phone number", {
+            type: "tel",
+            autoComplete: "tel",
+            placeholder: "+234…",
+          })}
+          <p className="hint">
+            Use the international number for your registration country.
+          </p>
+          {field("password", "Password", {
+            type: "password",
+            autoComplete: "new-password",
+            minLength: 12,
+            maxLength: 128,
+          })}
+          <p className="hint">
+            Use at least 12 characters for a stronger password.
+          </p>
+          <label className="checkbox">
+            <input name="acceptTerms" type="checkbox" required />
+            <span>
+              I am at least 18 and accept the{" "}
+              <a
+                href={policy?.termsUrl || "/policies"}
+                target="_blank"
+                rel="noreferrer"
+              >
+                account terms
+              </a>{" "}
+              and{" "}
+              <a
+                href={policy?.privacyUrl || "/policies"}
+                target="_blank"
+                rel="noreferrer"
+              >
+                privacy notice
+              </a>
+              .
+            </span>
+          </label>
+          {policy?.development && (
+            <p className="notice">
+              Test environment. Please use test details. Financial services are
+              not available yet.
+            </p>
           )}
-          {message && (
-            <div className="notice success" role="status">
-              {message}
-            </div>
-          )}
-          {!loading && screen === "login" && (
-            <form onSubmit={login}>
-              {field("email", "Email address", {
-                type: "email",
-                autoComplete: "username",
-                placeholder: "you@example.com",
-              })}
-              {field("password", "Password", {
-                type: "password",
-                autoComplete: "current-password",
-                maxLength: 128,
-              })}
-              <Link className="inline-link" href="/forgot-password">
-                Forgot password?
-              </Link>
-              {submit("Sign in")}
-              <p className="small">
-                Administrators use this same sign-in page. Access is determined
-                securely by your account.
-              </p>
-            </form>
-          )}
-          {!loading && screen === "register" && (
-            <form onSubmit={register}>
-              {field("email", "Email address", {
-                type: "email",
-                autoComplete: "email",
-                placeholder: "you@example.com",
-              })}
-              <label className="field" htmlFor="country">
-                Country
-                <select
-                  id="country"
-                  aria-label="Country"
-                  name="country"
-                  autoComplete="country"
-                  required
-                >
-                  <option value="">Select your country</option>
-                  {policy?.countries.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.name} · {c.currency}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {field("phone", "Phone number", {
-                type: "tel",
-                autoComplete: "tel",
-                placeholder: "+234…",
-              })}
-              <p className="hint">
-                Use the international number for your registration country.
-              </p>
-              {field("password", "Password", {
-                type: "password",
-                autoComplete: "new-password",
-                minLength: 12,
-                maxLength: 128,
-              })}
-              <p className="hint">
-                At least 12 characters. Password managers and paste are
-                supported.
-              </p>
-              <label className="checkbox">
-                <input name="acceptTerms" type="checkbox" required />
-                <span>
-                  I am at least 18 and accept the{" "}
-                  <a
-                    href={policy?.termsUrl || "/policies"}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    account terms
-                  </a>{" "}
-                  and{" "}
-                  <a
-                    href={policy?.privacyUrl || "/policies"}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    privacy notice
-                  </a>
-                  .
-                </span>
-              </label>
-              {policy?.development && (
-                <p className="notice">
-                  Development environment: legal policies and delivery providers
-                  require approval before launch.
-                </p>
-              )}
-              {submit("Create account")}
-            </form>
-          )}
-          {!loading && screen === "forgot-password" && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const f = new FormData(e.currentTarget);
-                action(async () => {
-                  const d = await api("auth/forgot-password", {
-                    email: f.get("email"),
-                  });
-                  setMessage(d.message);
+          {submit("Create account")}
+          <p className="switch-form">
+            Already part of Zetmond?{" "}
+            <Link href="/login">
+              Sign in
+              <ArrowUpRight size={14} />
+            </Link>
+          </p>
+        </form>
+      )}
+      {!loading && screen === "forgot-password" && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const f = new FormData(e.currentTarget);
+            action(async () => {
+              const d = await api("auth/forgot-password", {
+                email: f.get("email"),
+              });
+              setMessage(d.message);
+            });
+          }}
+        >
+          {field("email", "Email address", {
+            type: "email",
+            autoComplete: "email",
+          })}
+          {submit("Send reset link")}
+          <Link className="back-link" href="/login">
+            <ChevronLeft size={16} />
+            Back to sign in
+          </Link>
+        </form>
+      )}
+      {!loading &&
+        screen === "reset-password" &&
+        (done ? (
+          <Link className="primary" href="/login">
+            Sign in with your new password
+          </Link>
+        ) : (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const f = new FormData(e.currentTarget);
+              action(async () => {
+                const d = await api("auth/reset-password", {
+                  token: resetToken,
+                  password: f.get("password"),
                 });
-              }}
-            >
-              {field("email", "Email address", {
-                type: "email",
-                autoComplete: "email",
-              })}
-              {submit("Send reset link")}
-              <Link className="back-link" href="/login">
-                <ChevronLeft size={16} />
-                Back to sign in
-              </Link>
-            </form>
+                setMessage(d.message);
+                setResetToken("");
+                setDone(true);
+              });
+            }}
+          >
+            {!resetToken && (
+              <p className="notice">
+                Open the complete reset link from your email. If it has expired,{" "}
+                <Link href="/forgot-password">request another</Link>.
+              </p>
+            )}
+            {field("password", "New password", {
+              type: "password",
+              minLength: 12,
+              maxLength: 128,
+              autoComplete: "new-password",
+            })}
+            {submit("Update password")}
+          </form>
+        ))}
+      {!loading && user && screen === "verify-contacts" && (
+        <>
+          <div className="contact-grid">
+            {["email", "phone"].map((purpose) => (
+              <section className="panel" key={purpose}>
+                <div className="panel-title">
+                  {purpose === "email" ? (
+                    <Mail size={20} />
+                  ) : (
+                    <Smartphone size={20} />
+                  )}
+                  <h2>
+                    {purpose === "email" ? "Email address" : "Phone number"}
+                  </h2>
+                </div>
+                <p className="wrap">{user[purpose]}</p>
+                {user[
+                  purpose === "email" ? "emailVerified" : "phoneVerified"
+                ] ? (
+                  <p className="verified">
+                    <Check size={16} />
+                    Verified
+                  </p>
+                ) : (
+                  <>
+                    <form onSubmit={(e) => verify(e, purpose)}>
+                      <label className="field" htmlFor={`${purpose}-code`}>
+                        Six-digit code
+                        <input
+                          id={`${purpose}-code`}
+                          name="code"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          pattern="[0-9]{6}"
+                          maxLength={6}
+                          required
+                        />
+                      </label>
+                      {submit("Verify")}
+                    </form>
+                    <button
+                      className="quiet resend"
+                      disabled={busy}
+                      onClick={() =>
+                        action(async () => {
+                          const d = await api("auth/resend", { purpose });
+                          setMessage(d.message);
+                        })
+                      }
+                    >
+                      Send another code
+                    </button>
+                  </>
+                )}
+              </section>
+            ))}
+          </div>
+          {user.emailVerified && user.phoneVerified && (
+            <Link className="primary" href="/account">
+              Continue to your account
+              <ArrowRight size={18} />
+            </Link>
           )}
-          {!loading &&
-            screen === "reset-password" &&
-            (done ? (
-              <Link className="primary" href="/login">
-                Sign in with your new password
+          <p className="small">
+            Contact verification is separate from identity verification. Wallet
+            and trading access remain unavailable until KYC approval.
+          </p>
+        </>
+      )}
+      {!loading && screen === "mfa" && (
+        <form onSubmit={(e) => factor(e, false)}>
+          {field("code", "Authenticator or recovery code", {
+            autoComplete: "one-time-code",
+            maxLength: 80,
+          })}
+          {submit("Verify and continue")}
+          <p className="small">
+            Each recovery code works once. Support cannot bypass your security
+            checks.
+          </p>
+        </form>
+      )}
+      {!loading && screen === "mfa-setup" && !codes && (
+        <>
+          {!mfa ? (
+            <>
+              <p className="small">
+                Use an authenticator app such as Google Authenticator, Microsoft
+                Authenticator, or 1Password. Never share the setup key.
+              </p>
+              <button className="primary" disabled={busy} onClick={setup}>
+                Set up authenticator
+                <ShieldCheck size={18} />
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="setup-key">
+                {qr && (
+                  <img
+                    src={qr}
+                    alt="Scan this QR code with your authenticator app"
+                    width="220"
+                    height="220"
+                  />
+                )}
+                <p>Or enter this key manually:</p>
+                <code>{mfa.secret}</code>
+              </div>
+              <form onSubmit={(e) => factor(e, true)}>
+                {field("code", "Six-digit authenticator code", {
+                  inputMode: "numeric",
+                  pattern: "[0-9]{6}",
+                  maxLength: 6,
+                  autoComplete: "one-time-code",
+                })}
+                {submit("Enable authenticator")}
+              </form>
+            </>
+          )}
+        </>
+      )}
+      {codes && (
+        <section className="panel">
+          <h2>Save your recovery codes</h2>
+          <p>
+            Store these somewhere private. They are shown only once and each
+            works once.
+          </p>
+          <div className="recovery-codes">
+            {codes.map((c) => (
+              <code key={c}>{c}</code>
+            ))}
+          </div>
+          <button
+            className="primary"
+            onClick={() => {
+              setCodes(null);
+              router.replace(destination(user));
+            }}
+          >
+            I’ve stored my codes securely
+            <ArrowRight size={18} />
+          </button>
+        </section>
+      )}
+      {!loading && user && screen === "account" && (
+        <>
+          <section className="profile-banner" aria-label="Your profile">
+            <div className="profile-avatar" aria-hidden="true">
+              {user.email[0].toUpperCase()}
+            </div>
+            <div className="profile-summary">
+              <p className="profile-caption">PERSONAL ACCOUNT</p>
+              <h2>{user.email}</h2>
+              <p>
+                <Globe2 size={14} aria-hidden="true" />
+                {policy?.countries.find((c) => c.code === user.country)?.name}
+                <span>·</span>
+                {user.currency}
+              </p>
+            </div>
+            <span
+              className={`status-chip ${user.kycStatus === "approved" ? "complete" : "pending"}`}
+            >
+              {
+                {
+                  approved: "Identity verified",
+                  pending: "Verification in review",
+                  restricted: "Account restricted",
+                  not_started: "Identity not verified",
+                }[user.kycStatus]
+              }
+            </span>
+          </section>
+          <div className="account-grid">
+            <section className="panel checklist-panel">
+              <div className="panel-title">
+                <h2>Make yourself at home</h2>
+                <span className="step-count">
+                  {
+                    [
+                      user.emailVerified,
+                      user.phoneVerified,
+                      user.kycStatus === "approved",
+                    ].filter(Boolean).length
+                  }{" "}
+                  of 3 complete
+                </span>
+              </div>
+              <p className="panel-description">
+                Your next steps to a verified account.
+              </p>
+              <ol className="setup-checklist">
+                {[
+                  {
+                    label: "Verify your email",
+                    detail: user.emailVerified
+                      ? "Your email address is confirmed."
+                      : "Confirm the code sent to your inbox.",
+                    done: user.emailVerified,
+                    Icon: Mail,
+                  },
+                  {
+                    label: "Verify your phone",
+                    detail: user.phoneVerified
+                      ? "Your phone number is confirmed."
+                      : "Confirm the code sent to your phone.",
+                    done: user.phoneVerified,
+                    Icon: Smartphone,
+                  },
+                  {
+                    label: "Verify your identity",
+                    detail:
+                      user.kycStatus === "approved"
+                        ? "Your identity has been verified."
+                        : "Identity verification will be available soon.",
+                    done: user.kycStatus === "approved",
+                    Icon: UserRound,
+                  },
+                ].map(({ label, detail, done, Icon }, index) => (
+                  <li key={label} className={done ? "is-complete" : ""}>
+                    <span className="checklist-icon">
+                      {done ? <Check size={18} /> : <Icon size={18} />}
+                    </span>
+                    <div>
+                      <h3>{label}</h3>
+                      <p>{detail}</p>
+                    </div>
+                    {done ? (
+                      <span className="checklist-status">Done</span>
+                    ) : index < 2 ? (
+                      <Link href="/verify-contacts" aria-label={label}>
+                        <ArrowUpRight size={20} />
+                      </Link>
+                    ) : (
+                      <span className="checklist-status">Upcoming</span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+              {(!user.emailVerified || !user.phoneVerified) && (
+                <Link className="primary" href="/verify-contacts">
+                  Verify your contacts
+                  <ArrowRight size={18} />
+                </Link>
+              )}
+            </section>
+            <section className="security-summary">
+              <div className="security-emblem">
+                <ShieldCheck size={29} />
+              </div>
+              <h2>
+                A little extra
+                <br />
+                peace of mind.
+              </h2>
+              <p>
+                {user.mfaEnabled
+                  ? "Your authenticator adds another layer of protection to sensitive actions."
+                  : "Protect your account with an authenticator. It’s a small step that makes a difference."}
+              </p>
+              <Link href="/security">
+                {user.mfaEnabled
+                  ? "Review your security"
+                  : "Secure your account"}
+                <ArrowUpRight size={17} />
               </Link>
-            ) : (
+            </section>
+          </div>
+          {user.kycStatus !== "approved" && (
+            <div className="next-step-note">
+              <span className="next-step-icon">
+                <LockKeyhole size={20} />
+              </span>
+              <div>
+                <strong>Identity verification is next.</strong>
+                <p>
+                  Wallet and trading access will remain unavailable until
+                  identity verification is enabled and approved.
+                </p>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+      {!loading && user && screen === "security" && (
+        <>
+          <section className="panel">
+            <h2>Authenticator protection</h2>
+            <p>
+              {user.mfaEnabled
+                ? "Your authenticator is enabled. A fresh code is required for sensitive changes."
+                : "Add an authenticator before making sensitive account changes."}
+            </p>
+            {!user.mfaEnabled && (
+              <Link className="primary" href="/mfa-setup">
+                Set up authenticator
+                <ShieldCheck size={18} />
+              </Link>
+            )}
+          </section>
+          {user.mfaEnabled && (
+            <section className="panel">
+              <h2>Change password</h2>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   const f = new FormData(e.currentTarget);
                   action(async () => {
-                    const d = await api("auth/reset-password", {
-                      token: resetToken,
-                      password: f.get("password"),
+                    const password = f.get("password");
+                    const bytes = await crypto.subtle.digest(
+                      "SHA-256",
+                      new TextEncoder().encode(password),
+                    );
+                    const operationDigest = Array.from(new Uint8Array(bytes))
+                      .map((b) => b.toString(16).padStart(2, "0"))
+                      .join("");
+                    const grant = await api("auth/step-up", {
+                      purpose: "password_change",
+                      operationDigest,
+                      code: f.get("code"),
                     });
-                    setMessage(d.message);
-                    setResetToken("");
-                    setDone(true);
+                    await api("auth/change-password", {
+                      currentPassword: f.get("currentPassword"),
+                      password,
+                      stepUpId: grant.stepUpId,
+                    });
+                    router.replace("/login");
                   });
                 }}
               >
-                {!resetToken && (
-                  <p className="notice">
-                    Open the complete reset link from your email. If it has
-                    expired,{" "}
-                    <Link href="/forgot-password">request another</Link>.
-                  </p>
-                )}
+                {field("currentPassword", "Current password", {
+                  type: "password",
+                  autoComplete: "current-password",
+                  maxLength: 128,
+                })}
                 {field("password", "New password", {
                   type: "password",
+                  autoComplete: "new-password",
                   minLength: 12,
                   maxLength: 128,
-                  autoComplete: "new-password",
                 })}
-                {submit("Update password")}
+                {field("code", "Fresh authenticator or recovery code", {
+                  autoComplete: "one-time-code",
+                  maxLength: 80,
+                })}
+                {submit("Update password and sign out")}
               </form>
-            ))}
-          {!loading && user && screen === "verify-contacts" && (
-            <>
-              <div className="contact-grid">
-                {["email", "phone"].map((purpose) => (
-                  <section className="panel" key={purpose}>
-                    <div className="panel-title">
-                      {purpose === "email" ? (
-                        <Mail size={20} />
-                      ) : (
-                        <Smartphone size={20} />
-                      )}
-                      <h2>
-                        {purpose === "email" ? "Email address" : "Phone number"}
-                      </h2>
-                    </div>
-                    <p className="wrap">{user[purpose]}</p>
-                    {user[
-                      purpose === "email" ? "emailVerified" : "phoneVerified"
-                    ] ? (
-                      <p className="verified">
-                        <Check size={16} />
-                        Verified
-                      </p>
-                    ) : (
-                      <>
-                        <form onSubmit={(e) => verify(e, purpose)}>
-                          <label className="field" htmlFor={`${purpose}-code`}>
-                            Six-digit code
-                            <input
-                              id={`${purpose}-code`}
-                              name="code"
-                              inputMode="numeric"
-                              autoComplete="one-time-code"
-                              pattern="[0-9]{6}"
-                              maxLength={6}
-                              required
-                            />
-                          </label>
-                          {submit("Verify")}
-                        </form>
-                        <button
-                          className="quiet resend"
-                          disabled={busy}
-                          onClick={() =>
-                            action(async () => {
-                              const d = await api("auth/resend", { purpose });
-                              setMessage(d.message);
-                            })
-                          }
-                        >
-                          Send another code
-                        </button>
-                      </>
-                    )}
-                  </section>
-                ))}
-              </div>
-              {user.emailVerified && user.phoneVerified && (
-                <Link className="primary" href="/account">
-                  Continue to your account
-                  <ArrowRight size={18} />
-                </Link>
-              )}
-              <p className="small">
-                Contact verification is separate from identity verification.
-                Wallet and trading access remain unavailable until KYC approval.
-              </p>
-            </>
-          )}
-          {!loading && screen === "mfa" && (
-            <form onSubmit={(e) => factor(e, false)}>
-              {field("code", "Authenticator or recovery code", {
-                autoComplete: "one-time-code",
-                maxLength: 80,
-              })}
-              {submit("Verify and continue")}
-              <p className="small">
-                Each recovery code works once. Support cannot bypass your
-                security checks.
-              </p>
-            </form>
-          )}
-          {!loading && screen === "mfa-setup" && !codes && (
-            <>
-              {!mfa ? (
-                <>
-                  <p className="small">
-                    Use an authenticator app such as Google Authenticator,
-                    Microsoft Authenticator, or 1Password. Never share the setup
-                    key.
-                  </p>
-                  <button className="primary" disabled={busy} onClick={setup}>
-                    Set up authenticator
-                    <ShieldCheck size={18} />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="setup-key">
-                    {qr && (
-                      <img
-                        src={qr}
-                        alt="Scan this QR code with your authenticator app"
-                        width="220"
-                        height="220"
-                      />
-                    )}
-                    <p>Or enter this key manually:</p>
-                    <code>{mfa.secret}</code>
-                  </div>
-                  <form onSubmit={(e) => factor(e, true)}>
-                    {field("code", "Six-digit authenticator code", {
-                      inputMode: "numeric",
-                      pattern: "[0-9]{6}",
-                      maxLength: 6,
-                      autoComplete: "one-time-code",
-                    })}
-                    {submit("Enable authenticator")}
-                  </form>
-                </>
-              )}
-            </>
-          )}
-          {codes && (
-            <section className="panel">
-              <h2>Save your recovery codes</h2>
-              <p>
-                Store these somewhere private. They are shown only once and each
-                works once.
-              </p>
-              <div className="recovery-codes">
-                {codes.map((c) => (
-                  <code key={c}>{c}</code>
-                ))}
-              </div>
-              <button
-                className="primary"
-                onClick={() => {
-                  setCodes(null);
-                  router.replace(destination(user));
-                }}
-              >
-                I’ve stored my codes securely
-                <ArrowRight size={18} />
-              </button>
             </section>
           )}
-          {!loading && user && screen === "account" && (
-            <>
-              <section className="panel">
+          <Link className="inline-link" href="/sessions">
+            Review signed-in devices
+          </Link>
+        </>
+      )}
+      {!loading && screen === "sessions" && (
+        <div className="session-list">
+          {sessions.length === 0 ? (
+            <p>No active sessions to show.</p>
+          ) : (
+            sessions.map((s) => (
+              <section key={s.id} className="panel">
                 <div className="panel-title">
-                  <ShieldCheck size={20} />
-                  <h2>Account readiness</h2>
+                  <Smartphone size={20} />
+                  <h2>{s.current ? "This device" : "Signed-in device"}</h2>
                 </div>
-                <p className="wrap">{user.email}</p>
-                <dl className="details">
-                  <div>
-                    <dt>Country</dt>
-                    <dd>
-                      {
-                        policy?.countries.find((c) => c.code === user.country)
-                          ?.name
-                      }{" "}
-                      · {user.currency}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Email</dt>
-                    <dd>
-                      {user.emailVerified ? "Verified" : "Verification needed"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Phone</dt>
-                    <dd>
-                      {user.phoneVerified ? "Verified" : "Verification needed"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>Identity</dt>
-                    <dd>
-                      {user.kycStatus === "not_started"
-                        ? "Not started"
-                        : user.kycStatus}
-                    </dd>
-                  </div>
-                </dl>
-                {(!user.emailVerified || !user.phoneVerified) && (
-                  <Link className="primary" href="/verify-contacts">
-                    Verify your contacts
-                    <ArrowRight size={18} />
-                  </Link>
-                )}
-              </section>
-              <div className="notice">
-                <strong>Identity verification is next.</strong>
-                <p>
-                  KYC is not available yet. Wallet and trading actions remain
-                  unavailable. No balance or financial activity is simulated
-                  here.
+                <p className="device-label">{deviceLabel(s.user_agent)}</p>
+                <p className="small">
+                  Signed in {new Date(s.created_at).toLocaleString()}
                 </p>
-              </div>
-              <Link className="inline-link" href="/security">
-                Review your account security
-              </Link>
-            </>
-          )}
-          {!loading && user && screen === "security" && (
-            <>
-              <section className="panel">
-                <h2>Authenticator protection</h2>
-                <p>
-                  {user.mfaEnabled
-                    ? "Your authenticator is enabled. A fresh code is required for sensitive changes."
-                    : "Add an authenticator before making sensitive account changes."}
-                </p>
-                {!user.mfaEnabled && (
-                  <Link className="primary" href="/mfa-setup">
-                    Set up authenticator
-                    <ShieldCheck size={18} />
-                  </Link>
-                )}
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    action(async () => {
+                      await api(`auth/sessions/${s.id}`, {}, "DELETE");
+                      if (s.current) router.replace("/login");
+                      else setSessions(sessions.filter((v) => v.id !== s.id));
+                    })
+                  }
+                >
+                  {s.current ? "Sign out this device" : "Revoke access"}
+                </button>
               </section>
-              {user.mfaEnabled && (
-                <section className="panel">
-                  <h2>Change password</h2>
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const f = new FormData(e.currentTarget);
-                      action(async () => {
-                        const password = f.get("password");
-                        const bytes = await crypto.subtle.digest(
-                          "SHA-256",
-                          new TextEncoder().encode(password),
-                        );
-                        const operationDigest = Array.from(
-                          new Uint8Array(bytes),
-                        )
-                          .map((b) => b.toString(16).padStart(2, "0"))
-                          .join("");
-                        const grant = await api("auth/step-up", {
-                          purpose: "password_change",
-                          operationDigest,
-                          code: f.get("code"),
-                        });
-                        await api("auth/change-password", {
-                          currentPassword: f.get("currentPassword"),
-                          password,
-                          stepUpId: grant.stepUpId,
-                        });
-                        router.replace("/login");
-                      });
-                    }}
-                  >
-                    {field("currentPassword", "Current password", {
-                      type: "password",
-                      autoComplete: "current-password",
-                      maxLength: 128,
-                    })}
-                    {field("password", "New password", {
-                      type: "password",
-                      autoComplete: "new-password",
-                      minLength: 12,
-                      maxLength: 128,
-                    })}
-                    {field("code", "Fresh authenticator or recovery code", {
-                      autoComplete: "one-time-code",
-                      maxLength: 80,
-                    })}
-                    {submit("Update password and sign out")}
-                  </form>
-                </section>
-              )}
-              <Link className="inline-link" href="/sessions">
-                Review signed-in devices
-              </Link>
-            </>
+            ))
           )}
-          {!loading && screen === "sessions" && (
-            <div className="session-list">
-              {sessions.length === 0 ? (
-                <p>No active sessions to show.</p>
-              ) : (
-                sessions.map((s) => (
-                  <section key={s.id} className="panel">
-                    <div className="panel-title">
-                      <Smartphone size={20} />
-                      <h2>{s.current ? "This device" : "Signed-in device"}</h2>
-                    </div>
-                    <p className="wrap small">{s.user_agent}</p>
-                    <p className="small">
-                      Signed in {new Date(s.created_at).toLocaleString()}
-                    </p>
-                    <button
-                      className="secondary"
-                      disabled={busy}
-                      onClick={() =>
-                        action(async () => {
-                          await api(`auth/sessions/${s.id}`, {}, "DELETE");
-                          if (s.current) router.replace("/login");
-                          else
-                            setSessions(sessions.filter((v) => v.id !== s.id));
-                        })
-                      }
-                    >
-                      {s.current ? "Sign out this device" : "Revoke access"}
-                    </button>
-                  </section>
-                ))
-              )}
-            </div>
-          )}
-          {!loading &&
-            user?.role === "admin" &&
-            user.state === "admin" &&
-            screen === "admin-access" && (
-              <section className="panel">
-                <ShieldCheck size={28} />
-                <h2>Admin authentication is ready.</h2>
-                <p>
-                  The operations portal will be delivered in Task 10. No
-                  financial administration actions are available here.
-                </p>
-              </section>
-            )}
-          <footer className="form-footer">
-            <LockKeyhole size={14} /> Your credentials stay private. Never share
-            verification codes.
-          </footer>
         </div>
-      </main>
-    </div>
+      )}
+      {!loading &&
+        user?.role === "admin" &&
+        user.state === "admin" &&
+        screen === "admin-access" && (
+          <section className="panel">
+            <ShieldCheck size={28} />
+            <h2>Admin authentication is ready.</h2>
+            <p>
+              You’re signed in securely. The operations workspace is not
+              available yet.
+            </p>
+          </section>
+        )}
+      {!publicScreen && (
+        <footer className="form-footer">
+          <ShieldCheck size={15} aria-hidden="true" /> Keep your account yours.
+          Never share verification codes.
+        </footer>
+      )}
+    </AccountShell>
   );
 }

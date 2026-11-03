@@ -9,6 +9,11 @@ apps/
     app/[screen]/page.jsx        Explicitly allowlisted account routes
     app/policies/page.jsx        Clearly labelled development policy notice
     components/AccountApp.jsx    Shared login and responsive account forms
+    components/AccountShell.jsx Public layout and signed-in account navigation
+    components/Brand.jsx        Marketing logo and Zetmond wordmark
+    components/AppearanceToggle.jsx  Light, dark and system appearance
+    components/FormField.jsx    Accessible fields and password visibility
+    public/                     Original marketing logo and vault artwork
     next.config.mjs              Same-origin /api proxy to NestJS
   api/
     migrations/                 Versioned PostgreSQL account/security schema
@@ -26,6 +31,12 @@ pnpm-workspace.yaml              Shared pnpm workspace
 ```
 
 The customer app, public marketing site and API have independent build/start commands. The separate admin UI is deliberately deferred to Task 10; `/admin-access` only confirms protected authentication readiness. Customer and admin use `/login`, but the backend derives the role from persisted account records. No client role selector exists.
+
+## Account appearance
+
+Account screens use the marketing site's original logo and vault artwork, Inter body text, Space Grotesk headings, and purple palette. `Brand` uses the same symbol crop as the marketing header. The source images remain in `marketing/public/`; identical copies in `apps/customer/public/` allow the customer app to serve its assets independently.
+
+The customer layout imports the existing marketing theme provider and before-paint initialization script. Light, dark and system preferences persist in the browser. Public account forms pair with artwork on larger screens; authenticated pages use a sidebar on desktop and compact navigation on mobile. The account overview shows persisted verification and security status, with unavailable identity-verification and financial features labelled clearly.
 
 ## Delivered flows
 
@@ -114,7 +125,7 @@ pnpm build
 pnpm test
 ```
 
-Backend coverage includes direct role injection, invalid eligibility inputs, encrypted outbox, one-use/expired challenges, concurrent reset replay, owner-scoped sessions, mandatory admin MFA, TOTP/recovery-code replay, operation-bound password changes, hostile origins, lockout, API restart persistence and production configuration gates. Browser checks cover responsive registration, contact verification, recovery, login, sessions and denied admin access. Marketing has its own existing suite; it does not collect auth browser tests.
+Backend coverage includes direct role injection, invalid eligibility inputs, encrypted outbox, one-use/expired challenges, concurrent reset replay, owner-scoped sessions, mandatory admin MFA, TOTP/recovery-code replay, operation-bound password changes, hostile origins, lockout, API restart persistence and production configuration gates. Browser checks cover responsive public/account screens, contact verification, recovery, login, sessions, denied admin access and administrator MFA enrollment. They also check logo loading, light/dark/system preference persistence, password visibility and active account navigation. Marketing has its own existing suite; it does not collect auth browser tests.
 
 ## Remaining production prerequisites
 

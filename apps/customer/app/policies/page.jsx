@@ -1,7 +1,9 @@
+import Brand from "../../components/Brand";
 import Link from "next/link";
 export default function Policies() {
   return (
     <main className="standalone">
+      <Brand />
       <p className="eyebrow">ZETMOND ACCOUNT POLICIES</p>
       <h1>Policies before launch.</h1>
       <p>

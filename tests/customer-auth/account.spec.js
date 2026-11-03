@@ -47,6 +47,98 @@ test.afterAll(async () => {
   await db.end();
 });
 
+test("brand assets load, appearance persists and password visibility preserves input", async ({
+  page,
+}) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/login");
+  const passwordInput = page.getByLabel("Password", { exact: true });
+  await expect(passwordInput).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(
+    page.getByRole("button", { name: "System appearance" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  const logo = page.getByRole("link", { name: "Zetmond home" }).locator("img");
+  await expect(logo).toHaveAttribute("src", "/zetmond-logo.png");
+  await expect
+    .poll(() => logo.evaluate((img) => img.complete && img.naturalWidth > 0))
+    .toBe(true);
+  await passwordInput.fill(password);
+  await page
+    .getByRole("button", { name: "Show password", exact: true })
+    .click();
+  await expect(passwordInput).toHaveAttribute("type", "text");
+  await expect(passwordInput).toHaveValue(password);
+  await page
+    .getByRole("button", { name: "Hide password", exact: true })
+    .click();
+  await expect(passwordInput).toHaveAttribute("type", "password");
+  await expect(passwordInput).toHaveValue(password);
+  await passwordInput.clear();
+  await page.evaluate(() => document.fonts.ready);
+  await page.screenshot({
+    path: ".preview/customer-login-dark.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Light appearance" }).click();
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(
+    page.getByRole("button", { name: "Light appearance" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(passwordInput).toBeVisible();
+  await page.screenshot({
+    path: ".preview/customer-login-light.png",
+    fullPage: true,
+  });
+  await page
+    .getByRole("link", { name: "Create an account", exact: true })
+    .click();
+  await expect(page).toHaveURL(/register$/);
+  await expect(page.getByRole("checkbox")).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await page.screenshot({
+    path: ".preview/customer-register-desktop.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Dark appearance" }).click();
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.getByRole("button", { name: "System appearance" }).click();
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(errors).toEqual([]);
+});
+
+test("public forms remain usable from small phones to desktop", async ({
+  page,
+}) => {
+  for (const route of ["/login", "/register", "/forgot-password"]) {
+    await page.goto(route);
+    await expect(
+      page.getByLabel("Email address", { exact: true }),
+    ).toBeVisible();
+    for (const width of [320, 390, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+        `${route} fits at ${width}`,
+      ).toBe(true);
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/login");
+  await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
+  await page.screenshot({
+    path: ".preview/customer-login-mobile.png",
+    fullPage: true,
+  });
+});
+
 test("customer registration, contact verification and login are durable and keep KYC gated", async ({
   page,
 }) => {
@@ -86,6 +178,28 @@ test("customer registration, contact verification and login are durable and keep
     path: ".preview/customer-account-desktop.png",
     fullPage: true,
   });
+  await expect(
+    page.getByRole("link", { name: "My account", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  for (const width of [320, 390, 768, 1024]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+      `Account overview fits at ${width}`,
+    ).toBe(true);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: ".preview/customer-account-mobile.png",
+    fullPage: true,
+  });
+  await page.getByRole("link", { name: "Security", exact: true }).click();
+  await expect(page).toHaveURL(/security$/);
+  await expect(
+    page.getByRole("link", { name: "Security", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
 });
 test("mobile registration stays within the viewport and errors are accessible", async ({
   page,

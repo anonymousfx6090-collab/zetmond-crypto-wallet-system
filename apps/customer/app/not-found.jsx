@@ -1,7 +1,9 @@
+import Brand from "../components/Brand";
 import Link from "next/link";
 export default function NotFound() {
   return (
     <main className="standalone">
+      <Brand />
       <p className="eyebrow">ZETMOND</p>
       <h1>This page isn’t here.</h1>
       <p>Return to your account to continue.</p>
