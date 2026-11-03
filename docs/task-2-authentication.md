@@ -13,7 +13,7 @@ apps/
     components/Brand.jsx        Marketing logo and Zetmond wordmark
     components/AppearanceToggle.jsx  Light, dark and system appearance
     components/FormField.jsx    Accessible fields and password visibility
-    public/                     Original marketing logo and vault artwork
+    public/                     Original marketing logo
     next.config.mjs              Same-origin /api proxy to NestJS
   api/
     migrations/                 Versioned PostgreSQL account/security schema
@@ -34,7 +34,7 @@ The customer app, public marketing site and API have independent build/start com
 
 ## Account appearance
 
-Account screens use the marketing site's original logo and vault artwork, Inter body text, Space Grotesk headings, and purple palette. `Brand` uses the same symbol crop as the marketing header. The source images remain in `marketing/public/`; identical copies in `apps/customer/public/` allow the customer app to serve its assets independently.
+Account screens use the marketing site's original logo, Inter body text, Space Grotesk headings, and purple palette. `Brand` uses the same symbol crop as the marketing header. Desktop public forms feature an enlarged version of that symbol on a dark purple gradient, with the headline “Your next move starts here.” The source logo remains in `marketing/public/`; an identical copy in `apps/customer/public/` allows the customer app to serve it independently.
 
 The customer layout imports the existing marketing theme provider and before-paint initialization script. Light, dark and system preferences persist in the browser. Public account forms pair with artwork on larger screens; authenticated pages use a sidebar on desktop and compact navigation on mobile. The account overview shows persisted verification and security status, with unavailable identity-verification and financial features labelled clearly.
 

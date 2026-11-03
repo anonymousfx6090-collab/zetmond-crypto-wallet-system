@@ -144,20 +144,21 @@ export default function AccountShell({
                   THE ZETMOND WAY
                 </p>
                 <h2>
-                  Your USDT.
+                  Your next move
                   <br />
-                  <span>Your next move.</span>
+                  <span>starts here.</span>
                 </h2>
                 <p>A clearer way to hold, send, and trade.</p>
               </div>
               <div className="showcase-art" aria-hidden="true">
-                <img
-                  src="/images/hero-vault.png"
-                  alt=""
-                  width="1254"
-                  height="1254"
-                  fetchPriority="low"
-                />
+                <span className="showcase-symbol">
+                  <img
+                    src="/zetmond-logo.png"
+                    alt=""
+                    width="2200"
+                    height="800"
+                  />
+                </span>
               </div>
               <div className="showcase-footer">
                 <span>
