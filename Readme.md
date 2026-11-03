@@ -81,3 +81,7 @@ Theme checks cover saved preferences, live system changes, keyboard/mobile contr
 initial rendering, and browsers with storage disabled.
 
 No public deployment or external service connection is configured.
+
+## Customer accounts and authentication (Task 2)
+
+The marketing site remains in `marketing/`. The customer application is in `apps/customer/` and the NestJS/PostgreSQL backend is in `apps/api/`. See [Task 2 setup, structure, security policy and tests](docs/task-2-authentication.md). Authentication is implemented independently of the deferred wallet, KYC and admin operations features.
