@@ -240,6 +240,11 @@ test("password recovery uses a single-use link and signs out existing sessions",
   await register(page, email, "+2348031234573");
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page.getByRole("link", { name: "Forgot password?" }).click();
+  // Login also has an email field; wait for the recovery form before filling it.
+  await expect(page).toHaveURL(/forgot-password$/);
+  await expect(
+    page.getByRole("button", { name: "Send reset link", exact: true }),
+  ).toBeVisible();
   await page.getByLabel("Email address", { exact: true }).fill(email);
   await page.getByRole("button", { name: "Send reset link" }).click();
   await expect(page.getByRole("status")).toContainText("If an account matches");
