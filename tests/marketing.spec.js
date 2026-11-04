@@ -45,13 +45,16 @@ test('Vault walkthrough supports mouse and keyboard navigation', async ({ page }
   await expect(first).toHaveAttribute('aria-selected', 'true');
 });
 
-test('product FAQ works and account actions stay unlinked until the web app is connected', async ({ page }) => {
+test('product FAQ works and account links target the customer app', async ({ page }) => {
   await page.goto('/');
   await page.getByText('Do both sides have to fund a trade?', { exact: true }).click();
   await expect(page.locator('details[open]')).toContainText('Either party can fund first');
   await expect(page.locator('body')).not.toContainText(/prototype|simulation|simulated|marketing preview|TBD|we’re building/i);
-  for (const button of await page.getByRole('button', { name: /Get started|Log in|Create an account/, includeHidden: true }).all()) {
-    await expect(button).toBeDisabled();
+  const customerOrigin = process.env.NEXT_PUBLIC_CUSTOMER_APP_ORIGIN || 'http://127.0.0.1:4200';
+  for (const [name, path, count] of [[/Get started|Create an account/, '/register', 6], [/Log in/, '/login', 2]]) {
+    const links = page.getByRole('link', { name, includeHidden: true });
+    await expect(links).toHaveCount(count);
+    for (const link of await links.all()) await expect(link).toHaveAttribute('href', new URL(path, customerOrigin).href);
   }
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
@@ -75,9 +78,13 @@ test('narrow layouts stay within the viewport and mobile navigation works', asyn
   expect((await dialog.boundingBox()).height).toBe(844);
   await dialog.getByRole('button', { name: 'System', exact: true }).focus();
   await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('link', { name: 'Get started' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('link', { name: 'Log in' })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(dialog.getByRole('link', { name: 'Zetmond home' })).toBeFocused();
   await page.keyboard.press('Shift+Tab');
-  await expect(dialog.getByRole('button', { name: 'System', exact: true })).toBeFocused();
+  await expect(dialog.getByRole('link', { name: 'Log in' })).toBeFocused();
   await page.screenshot({ path: '.preview/mobile-menu-open.png' });
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();

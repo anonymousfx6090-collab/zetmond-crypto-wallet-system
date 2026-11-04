@@ -68,6 +68,8 @@ pnpm dev:customer
 
 API: port 4100. Customer: port 4200. Existing marketing: `pnpm dev`, port 4173. No shared root Next.js route or marketing source migration is required. For build/serve use `pnpm build:auth`, `pnpm --filter @zetmond/api start`, and `pnpm --filter @zetmond/customer start` (supply environment variables or Node's `--env-file` for the compiled API).
 
+Marketing account links now open the customer app: “Get started”/“Create an account” go to `/register`; “Log in” goes to `/login`. Keep all three local processes running to use the complete entry flow. Links default to `http://127.0.0.1:4200` for local use; use `marketing/.env.local` (see its `.env.example`) to set `NEXT_PUBLIC_CUSTOMER_APP_ORIGIN` for another address. Set the deployed customer's HTTPS origin before building marketing for deployment; this public value is fixed at build time. The API's `APP_ORIGIN` must match the customer app's browser-visible origin, including when using forwarded VS Code ports.
+
 Development delivery keeps encrypted messages in PostgreSQL rather than pretending to deliver email/SMS. An owner at the terminal can inspect their test inbox:
 
 ```sh
