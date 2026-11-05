@@ -10,7 +10,7 @@
 | Delivery intent | A production service for real users, real identity verification and real funds |
 | Document status | Owner-approved decisions recorded in Section 23; remaining details and launch blockers remain explicit |
 | Primary source | `Zetmond_Product_Requirements_Document_v1.0.md`, dated 19 October 2026 |
-| Authoritative update | Production scope retained; owner decision review and shared-login correction incorporated on 3 November 2026 |
+| Authoritative update | Owner decision review and shared login: 3 November 2026; negotiated-price chat, matching submissions, funding activation and Render API hosting: 5 November 2026 · Africa/Lagos |
 | Platforms | Responsive browser application: desktop, tablet, phone and intermediate widths |
 | Related surfaces | Existing public marketing site; customer web application; separate admin portal |
 | Schedule | No launch date or delivery estimate has been approved |
@@ -29,6 +29,10 @@ This revision preserves the uploaded v1.0 production requirements and records th
 **Precedence:** the explicit decisions in Section 23 and the shared-login correction below supersede conflicting v1.0 proposed baselines, unresolved-policy wording, visual references and earlier main-PRD statements. References elsewhere to an O-number mean its current Section 23 entry; approval of a baseline does not resolve that entry's remaining TBD details. Unchanged technical safeguards and acceptance requirements remain applicable. This revision records decisions, not completed implementation, verified provider capabilities or permission to accept real funds.
 
 **Shared-login correction:** customers and administrators use the same login page. Admin accounts are provisioned in advance by the owner, with securely hashed passwords and mandatory authenticator-app MFA. The backend determines the authenticated account's role and redirects to the customer app or separate admin portal. Admin APIs enforce authorization independently of the redirect, URL or client-provided role. There is no public admin signup. Customer access never grants admin access.
+
+**Negotiated-price correction — owner-approved 5 November 2026:** buyers and sellers may negotiate in private trade chat, including a rate different from the advert. Each party submits their own trade details. Rate, fiat currency and USDT quantity must match, and both parties must confirm the same final invoice before activation. The initial 20-minute funding window begins only after that confirmation and availability of both funding instructions. This supersedes the earlier fixed-advert-price-only flow, advertiser acceptance by publication, and exclusion of trade chat; see Sections 9–11 and decisions O10/O23. Vault remains Task 9 and the admin portal remains Task 10.
+
+**API hosting — owner-selected 5 November 2026:** use Render for the NestJS APIs; retain the marketing and customer frontends on Vercel. See Section 16.7 and O25/O26 for connectivity and deployment requirements. Selecting hosting does not claim that an API deployment or its production dependencies are configured.
 
 **Current delivery context:** budget and launch volume are TBD, no launch date is set, and development is planned with the product owner and AI assistant. Operational responders, independent assessments and any specialist responsibilities must still be assigned before launch; they are not supplied by this development arrangement.
 
@@ -136,7 +140,7 @@ The Vault collects both sides of an accepted P2P trade: the seller's USDT and th
 | Accounts | Registration, login, recovery, country capture, contact binding and approved security controls |
 | Identity | Real KYC integration/process, status, correction and server-enforced eligibility |
 | Wallet | Custodial USDT balances, supported external deposits/withdrawals, holds and receipts |
-| P2P | Fixed-rate offers, eligibility checks, order acceptance and immutable invoices |
+| P2P | Advertised rates, private trade negotiation, independently submitted matching terms, eligibility checks, mutual confirmation and immutable accepted invoices |
 | Vault | Both deposit routes, exact amount checks, persistent timers and verified settlement |
 | Recovery | Payment review, cancellation, late funds, payout recovery and refunds |
 | Advertisers | Eligibility, applications, approved categories, collateral and offer management |
@@ -152,7 +156,7 @@ Scope may be phased only through an explicit owner decision. Unavailable capabil
 - Native iOS/Android apps, offline transaction execution or an installable PWA commitment.
 - Assets other than USDT; fiat wallet balances; self-custody recovery phrases.
 - Staking, lending, leverage, swaps, cards, referral programmes or business accounts.
-- Negotiated-price trading, public user-to-user chat or ratings unless separately approved.
+- Public chat rooms, public user reviews/ratings and general social messaging. Private buyer–seller chat linked to a P2P trade is included.
 - A multi-role admin permission hierarchy.
 - Rebuilding the completed marketing site, except separately approved integration/copy updates.
 
@@ -172,12 +176,12 @@ These rules carry forward from the main PRD unless specifically superseded above
 | BR-06 | Seller P2P crypto funding and buyer P2P crypto receipt use Zetmond wallets. |
 | BR-07 | Buyer fiat is paid to the Vault collection account; seller fiat is paid to the seller's verified bank destination. |
 | BR-08 | The Vault provides a crypto funding destination and a unique trade-linked fiat account. Allocation mechanics are unresolved. |
-| BR-09 | Advertisers publish fixed rates; an accepted order keeps its original rate. |
+| BR-09 | Advertisers publish a quoted rate; the parties may negotiate another rate in private trade chat. Each submits matching rate, currency and USDT quantity, then both confirm the same invoice. The accepted rate is fixed for that trade. |
 | BR-10 | Both parties pay a 0.5% platform fee, added to their respective deposits. |
 | BR-11 | Each invoice shows the platform fee before payment, in the actual asset/currency. |
 | BR-12 | Cancelled trades retain no platform fee; any deposited platform-fee component is returned. |
 | BR-13 | Bank charges are separate. The buyer's bank refund charge is deducted from the buyer's refund. |
-| BR-14 | Neither party funded: 20-minute window after the agreement becomes active. |
+| BR-14 | Neither party funded: 20-minute funding window starts only after both confirm matching trade details and both funding instructions are available. Chat, incomplete submissions and mismatches do not start it. |
 | BR-15 | First qualifying payment: replace that deadline with a fresh 15-minute window for the other party. |
 | BR-16 | After either party pays, users cannot cancel the trade. Pending/uncertain payments at expiry enter review. |
 | BR-17 | Incorrect fiat amount, whether too low or too high, cancels the trade and triggers the applicable returns. |
@@ -499,25 +503,26 @@ Both Buy USDT and Sell USDT views must show:
 
 - Advertiser identity/display name permitted by policy.
 - Approved category/level, clearly distinct from identity verification.
-- Fixed price with settlement currency and price unit.
+- Advertised price with settlement currency and price unit (fiat per 1 USDT); identify it separately from any negotiated final rate.
 - Available quantity and minimum/maximum order size.
 - Supported Vault settlement method.
 - Eligibility/unavailability state and correct Buy/Sell action from the viewer's perspective.
 
-Proposed filters: supported settlement currency, amount and advertiser category. Sorting/ranking, historical metrics, reviews and user chat remain O23. Never fill missing real metrics with fictional trade counts or completion percentages.
+Filters, advertised-price sorting, historical metrics and private trade chat follow O23. Public reviews remain excluded. Never fill missing real metrics with fictional trade counts or completion percentages.
 
 **Desktop:** table/list with filters and row actions. **Mobile:** stacked offer cards; filters open as an accessible sheet or dedicated screen. Price, limits and action remain on the same card.
 
 ### 9.2 Offer selection and quote
 
-- Show complete offer terms before the order is accepted.
+- Show complete advertised terms and an entry to private trade chat before final acceptance. Opening chat or selecting an advert does not accept its rate or activate a trade.
 - Validate user eligibility, network/market availability, self-trading restrictions under the approved policy, quantities and the current offer version.
 - Recheck offer availability at commitment; the first user's open page does not prove inventory remains available.
-- If terms change before acceptance, show the changed terms and require a fresh review.
+- Allow a negotiated rate different from the advert. Follow the independent-entry, matching and mutual-confirmation requirements in Section 10.1.1.
+- If draft terms change before activation, show the changed terms, invalidate both confirmations and require a fresh matching submission/review for the new version.
 - Once accepted, rate, principals, fees, destinations and rule versions are immutable.
 - Prevent duplicate order creation from repeated submissions.
 
-How liquidity is reserved before/after acceptance, whether a seller's funds are already reserved by an offer and when unused reservations release must be settled under O23/O03. Implementation must distinguish an offer reservation from actual Vault funding so it does not start the 15-minute clock prematurely.
+Reserve offer inventory atomically at activation under O23/O03. Chat and draft agreement entry do not reserve inventory or start a funding clock. Distinguish an offer reservation from actual Vault funding so it does not start the 15-minute clock prematurely.
 
 ### 9.3 Advertiser eligibility and application
 
@@ -539,7 +544,7 @@ Bybit was an inspiration for the category structure. Its current fees, deposits 
 
 ### 9.5 Offer management
 
-Advertisers can create, view, edit, pause/resume and close eligible offers under approved rules. Creation requires direction, supported fiat market, fixed rate, available quantity and min/max order sizes. Validate all inputs on the server and reject inconsistent limits.
+Advertisers can create, view, edit, pause/resume and close eligible offers under approved rules. Creation requires direction, supported fiat market, advertised rate, available quantity and min/max order sizes. The advertised rate is a negotiation starting point; the matched and mutually confirmed trade rate determines the invoice. Validate all inputs on the server and reject inconsistent limits.
 
 Edits apply to future orders. Pausing an offer stops new order acceptance but does not erase existing trades or outstanding obligations. Explain the distinction before confirmation. Concurrent edits use a version check to prevent overwriting a newer change.
 
@@ -554,16 +559,28 @@ Edits apply to future orders. Pausing an offer stops new order acceptance but do
 The accepted trade must preserve:
 
 - Order ID, participants and buyer/seller assignments.
-- USDT quantity, fiat currency and fixed rate.
+- USDT quantity, fiat currency, original advertised rate and final agreed rate (fixed after acceptance).
 - Principal and each platform-fee amount.
 - Exact deposit for each participant, with approved rounding.
 - Separately approved bank charges and payer allocation.
 - Buyer Zetmond wallet and seller bank destination snapshots.
 - Funding windows, cancellation/refund policy version and fee/rule versions.
-- Acceptance evidence for both parties under the selected acceptance model.
+- Each party's submitted rate/currency/quantity, submission version and timestamp; matching result; both parties' confirmation evidence bound to the same final invoice version.
 - Creation/activation timestamps, quote/offer version and subsequent financial references.
 
-Acceptance by publishing an offer versus explicit acceptance per order remains O10. Do not start the 20-minute deadline while displaying “waiting for the other party” unless that matches the finally approved activation rule.
+Activation follows O10: both parties independently submit matching trade details and confirm the same final invoice, both funding instructions are available, and the backend atomically rechecks eligibility and inventory. Publishing an offer or sending a chat message does not constitute final acceptance.
+
+### 10.1.1 Private negotiation and matching trade details — Approved
+
+1. Provide a durable private conversation linked to the proposed trade and restricted to its buyer and seller, with authorized operational access under existing permissions/audit rules. Enforce conversation ownership on the backend. Chat messages are negotiation evidence, not payment confirmation or automatic acceptance.
+2. Each party enters and submits their own agreed rate, expressed as fiat per 1 USDT, and the agreed USDT quantity and fiat currency. A party cannot submit or confirm on behalf of the counterparty. Supported-market, quantity, precision and eligibility rules still apply.
+3. Compare the stored submissions on the backend using validated exact decimal values and explicit currency/units. Both must match in rate, fiat currency and USDT quantity. Matching rates may differ from the original advert. Derive fiat principal and fees from these matched terms using Section 10.3; a chat statement or blockchain transfer cannot supply the fiat selling price.
+4. While either submission is missing or any required value differs, keep **Trade** disabled and reject activation through direct API calls. For rate mismatches, show the buyer “Your price doesn't match the seller's price” and the seller “Your price doesn't match the buyer's price.” Identify quantity/currency mismatches separately and direct the parties back to chat or their own form to correct their submission. If the other party has not submitted, show “Waiting for the other party's trade details.”
+5. Example: seller and buyer both submit NGN 1,400 per USDT for 100 USDT. The principal is NGN 140,000 before fees. Seller 1,400 versus buyer 1,450 is a mismatch; no trade activation, funding action or funding timer is allowed.
+6. After matching, calculate and show both parties the final rate, quantity, fiat principal, each fee, exact deposits, destinations and applicable rules. Both must explicitly confirm the same invoice version. Any pre-activation change to negotiated terms or invoice details invalidates both confirmations and requires fresh matching/review. Reject stale submissions and confirmations; recheck the current version atomically when activating.
+7. Start the 20-minute funding deadline only when both current confirmations exist and both funding instructions are available. A provisioning failure keeps activation pending without consuming payment time. Save the activation timestamp and deadline once. Once active, the accepted invoice is immutable; chat or advert edits cannot change it or restart deadlines. Existing cancellation, payment-review and refund rules continue to apply.
+
+**Responsive experience:** on desktop, show private chat alongside trade details and matching/confirmation status. On mobile, provide accessible chat and trade-details views that retain entered values and clearly expose missing/mismatched terms and confirmation status. Announce status changes accessibly; never rely on a disabled button alone to explain the block.
 
 ### 10.2 Receiving accounts
 
@@ -648,7 +665,8 @@ A signed notification alone is not sufficient if its transaction data cannot be 
 
 | Stage | Deadline |
 |---|---|
-| Both parties have accepted; neither funded | Activation time + 20 minutes |
+| Chatting, missing/mismatched submissions, awaiting either confirmation or funding instructions | No funding deadline; agreement not active |
+| Matching rate/currency/quantity, both confirm the same invoice, both funding instructions available; neither funded | Activation time + 20 minutes |
 | First qualifying payment recorded | Qualifying first-payment time + 15 minutes |
 | Both correct deposits qualify | Funding countdown ceases; settlement status takes over |
 | Expiry with pending/uncertain evidence | Payment review; no premature return or release |
@@ -765,7 +783,7 @@ The following names are a proposed implementation vocabulary. The confirmed outc
 
 | Trade state | Meaning | Principal next outcomes, subject to verified guards |
 |---|---|---|
-| Agreement pending | Final terms not fully accepted | Activate after acceptance; abandon under approved policy |
+| Agreement pending | Negotiation, missing/mismatched terms, outstanding confirmation or unavailable funding instructions; no funding timer | Activate only after backend matching, both current confirmations and available instructions; abandon under approved policy |
 | Awaiting funding | No qualifying deposit; initial window active | One funded, review or no-funds cancellation |
 | Buyer funded / Seller funded | Exactly one qualifying side; second window active | Ready to settle, review or cancellation/returns |
 | Payment review | Evidence, timing, source or amount is uncertain | Evidence-based approved settlement or cancellation; no invented deadline reset |
@@ -932,13 +950,13 @@ Each row is a logical product screen. Some states can share a route/component; t
 |---|---|---|---|---|
 | UI-P01 | P2P market | Buy/Sell, supported currency, offers, limits and availability | Filterable table/list | Stacked offer cards and filter sheet |
 | UI-P02 | Advertiser profile | Approved category, real metrics/definitions, active offers | Profile plus offers | Summary then offer cards |
-| UI-P03 | Offer detail/amount | Fixed rate, limits, quantity, estimated invoice | Form and terms | Sequential readable entry |
+| UI-P03 | Offer detail/amount | Advertised rate, limits, quantity, estimate and private trade-chat entry; final rate may be negotiated | Form and terms | Sequential readable entry |
 | UI-P04 | Advertiser dashboard | Category, eligibility/application, own offers and collateral links | Summary and tables | Summary cards and actions |
 | UI-P05 | Eligibility/application | KYC, contacts, bank match, approved deposit and application | Checklist and form | Checklist followed by next action |
 | UI-P06 | Application status | Review/correction/approval/rejection and reason | Status/detail panel | Full-page status |
 | UI-P07 | Tier centre | Approved General/Verified/Block rules and benefits | Comparison layout | Stacked category cards |
 | UI-P08 | Advertiser collateral | Required/locked amounts, funding/release states and policy | Ledger/detail with review | Clear available versus locked distinction |
-| UI-P09 | Create offer | Direction, market, fixed rate, quantity and min/max | Form plus validation summary | Single-column form |
+| UI-P09 | Create offer | Direction, market, advertised rate, quantity and min/max | Form plus validation summary | Single-column form |
 | UI-P10 | My offers | Active/paused/closed, edit and availability | Table | Cards with labelled actions |
 | UI-P11 | Edit offer | Versioned changes and future-order effect | Form/summary | Full-page editor |
 | UI-P12 | Pause/close confirmation | Consequence for new orders; active orders continue | Accessible dialog or page | Sheet/page with deliberate confirm |
@@ -948,8 +966,8 @@ Each row is a logical product screen. Some states can share a route/component; t
 | ID | Screen | Required content/actions | Desktop | Mobile |
 |---|---|---|---|---|
 | UI-V01 | Receiving accounts | Buyer's Zetmond wallet or seller's verified bank | Selection plus summary | Full-width account cards |
-| UI-V02 | Invoice/acceptance | Principal, rate, fees, exact total, destinations and rules | Invoice plus order summary | Invoice stacked before acceptance |
-| UI-V03 | Awaiting acceptance | If required by O10: real counterparty acceptance status | Status and terms | Status and help; no fake timer |
+| UI-V02 | Invoice/acceptance | Matched agreed rate/quantity/currency, principal, fees, exact totals, destinations, rules and both version-bound confirmations | Invoice plus order summary | Invoice stacked before confirmation |
+| UI-V03 | Awaiting acceptance | Missing/mismatched submissions, buyer/seller-specific errors, both confirmation states and funding-instruction readiness; Trade disabled until requirements met | Status and terms alongside chat | Status and help; no funding timer |
 | UI-V04 | My Vault trades | Active, completed, review, cancelled and refund states | Filterable table | Status/amount-led cards |
 | UI-V05 | Vault funding | Role-specific exact payment, deadline, both deposits | Progress + payment + summary | Deadline and own action first |
 | UI-V06 | Payment review | Reason category, funds status, next update/support | Investigation summary | Readable state and safe action |
@@ -961,6 +979,7 @@ Each row is a logical product screen. Some states can share a route/component; t
 | UI-V12 | Refund issue | Pending/failed/unknown return and case entry | Exception detail | Full-page recovery status |
 | UI-V13 | Late-payment review | Closed order, linked late money and return status | Timeline | Status + reference + support |
 | UI-V14 | Manual unfunded cancellation | Approved under O13 when neither side paid and no payment is pending; atomic server recheck | Deliberate review | Same approved rule and safeguards |
+| UI-V15 | Private trade chat and agreement entry | Buyer–seller conversation, own rate/quantity/currency submission, match status and invoice confirmation; role-specific mismatch feedback | Chat beside trade details | Accessible chat/details views with retained entries |
 
 ### 15.5 Account and support
 
@@ -1024,7 +1043,7 @@ Every state specifies what happened, whether funds may already have moved, which
 
 ### 16.1 Service boundaries
 
-The following responsibilities are required. They may be implemented in a modular backend rather than separate microservices; no deployment topology is approved by this PRD.
+The following responsibilities are required. They may be implemented in a modular NestJS backend rather than separate microservices. Render is the selected API host and Vercel hosts the marketing/customer frontends; service sizing, worker topology and remaining infrastructure selections follow Section 16.7 and O25/O26.
 
 | Boundary | Responsibility |
 |---|---|
@@ -1033,7 +1052,8 @@ The following responsibilities are required. They may be implemented in a modula
 | Wallet/custody | Addresses, approved networks, transfers, confirmations and custody reconciliation |
 | Ledger | Exact balances, reservations, fees, liabilities, postings and correction history |
 | Marketplace | Offers, eligibility, versions, limits and allocation |
-| Trade engine | Agreement, invoice snapshots, states, deadlines and settlement/return decisions |
+| Trade engine | Independent term submissions, matching, version-bound confirmations, immutable invoices, activation, deadlines and settlement/return decisions |
+| Trade chat | Durable trade-linked conversations/messages, participant authorization and reconnection recovery |
 | Fiat integration | Collection account allocation, verified receipts, payout/refund attempts and status lookup |
 | KYC integration | Submission/result mapping, provider verification and review evidence |
 | Operations | Review queues, reconciliation, support and authorized recovery |
@@ -1057,8 +1077,10 @@ These are requirements for information and relationships, not a committed databa
 | Ledger transaction | Business reference, asset/currency, balanced entries, type, idempotency key and immutable timestamp |
 | Reservation/hold | Owner, purpose, source amount, linked order/request, lifecycle and release evidence |
 | Advertiser profile/application | Category/level, policy version, checks, approval history, limits and collateral linkage |
-| Offer | Advertiser, direction, supported market, fixed rate, quantities/limits, version and status |
-| Trade agreement | Participants, immutable rate/amounts/destinations/rules, acceptance and activation evidence |
+| Offer | Advertiser, direction, supported market, advertised rate, quantities/limits, version and status |
+| Trade conversation/message | Proposed trade, buyer/seller membership, authenticated sender, message body, stable ID and server timestamp; authorized access and delivery/recovery state |
+| Trade term submission | Trade, submitting party/role, exact rate and unit, fiat currency, USDT quantity, version, timestamp and matching result |
+| Trade agreement | Participants, advertised and agreed rates, immutable accepted amounts/destinations/rules, both confirmations linked to the same invoice version and activation evidence |
 | Invoice | Party, principal, fees, charges, exact payable amount, precision and version |
 | Deposit/payment | Expected/observed gross/net, asset/currency, source, external ID, verified state and timestamps |
 | Payout obligation | Trade, recipient snapshot, amount, status, unique business identity and fulfillment evidence |
@@ -1119,6 +1141,16 @@ Use stable machine-readable error categories mapped to helpful customer messages
 ### 16.6 Frontend state and cache
 
 The browser may cache display data and permitted form drafts, but cache is not a ledger. On reconnect, refresh balances, eligibility, quote validity, deadlines and operation status before enabling an action. Persist a request reference where needed to recover an interrupted submission. Do not keep secrets, identity evidence or bank-account data in generic analytics or insecure browser storage.
+
+### 16.7 Render API hosting and Vercel connectivity — Owner-selected 5 November 2026
+
+- Deploy the NestJS APIs from `apps/api` to Render, using a reproducible monorepo install/build/start configuration. The API must bind to `0.0.0.0` and Render's assigned `PORT`, rather than a loopback-only address. Provide the existing `/api/health` endpoint and deployment/readiness checks appropriate to database and worker availability.
+- Retain marketing at `https://zetmond-crypto-wallet-system.vercel.app` and the customer app at `https://zetmond.vercel.app` as the owner-supplied frontend addresses. Custom domains and the eventual admin hostname remain TBD. The Render API service URL is not yet supplied; record the actual HTTPS origin after service creation rather than inventing one.
+- Configure `API_INTERNAL_ORIGIN` in the customer Vercel project's server/build environment to the Render API's HTTPS origin, then rebuild/redeploy the customer app so its `/api` rewrite targets that service. Browser requests remain same-origin with the customer app. Configure the API's `APP_ORIGIN=https://zetmond.vercel.app` for the current customer address; revisit it explicitly if that address changes. Verify session cookies, origin/CSRF checks, HTTPS proxy behaviour and shared-login role routing end to end.
+- Marketing account links target `https://zetmond.vercel.app` through the existing `NEXT_PUBLIC_CUSTOMER_APP_ORIGIN` setting/default. Marketing-to-customer links and customer-to-API connectivity are separate deployment requirements.
+- Supply PostgreSQL, Redis/BullMQ where required, stable encryption/key references and provider credentials through protected service configuration. Never use instance-local files or memory as the durable trade, message, session or financial store. Database/Redis hosting providers, region, service plans, storage and custody infrastructure remain to be selected; choosing Render for APIs does not select those automatically.
+- Use controlled migrations, isolated staging/production configuration, health monitoring, restart recovery and compatible releases. Durable background processing must enforce funding expiry/recovery even while browsers are closed. The selected API/worker service plan must support the required availability; a sleeping/suspended service must not be treated as reliable enforcement of financial deadlines.
+- Production startup and release safeguards still apply, including approved legal/security configuration and eligible real providers. Service creation, deployment, secret setup and actual connection tests are implementation work; this PRD records the hosting choice without claiming those steps are complete.
 
 ---
 
@@ -1317,6 +1349,14 @@ Each test record must identify requirement, preconditions, input/event, expected
 | AT-30 | Payment arrives at the exact boundary or webhook is delayed | Apply the signed-off O11 policy using saved evidence; no device-clock decision |
 | AT-31 | Worker restarts during expiry processing | Persisted job/state recovers without duplicate return or lost deadline |
 | AT-32 | Account/address provisioning fails | No false funding instructions; activation/deadline handling follows approved O07/O10 |
+| AT-69 | Advertised rate differs from the negotiated rate; both submit NGN 1,400 for 100 USDT | Matched terms permitted; principal NGN 140,000 before fees; both confirm the same invoice before activation |
+| AT-70 | Seller enters 1,400 and buyer enters 1,450 | Trade disabled; role-specific price mismatch shown; backend rejects activation and no funding timer starts |
+| AT-71 | One submission is missing, or currency/USDT quantity differs despite equal rates | Waiting/mismatch reason shown; no activation or funding deadline |
+| AT-72 | One party changes draft terms after either confirmation, or stale requests race activation | Prior confirmations invalidated; backend requires both confirmations of the current matching invoice; no activation using mixed versions |
+| AT-73 | Chat runs for more than 20 minutes; a message says “agreed” or “paid” | No funding deadline during negotiation; messages alone neither activate the trade nor prove payment |
+| AT-74 | Both matching submissions and invoice confirmations exist but funding instructions are not ready | Remain pending without a funding clock; activate once after readiness and atomic eligibility/inventory checks |
+| AT-75 | Nonparticipant reads/posts to trade chat, submits the counterparty's terms or confirms for them | Backend denies access/action; no forged acceptance or disclosure |
+| AT-76 | Advert or chat changes after activation | Accepted rate/invoice unchanged; existing 20/15-minute deadlines never reset |
 
 ### 20.3 Mismatch, settlement and refunds
 
@@ -1384,7 +1424,7 @@ Each task includes backend behaviour, responsive screens, authorization, durable
 | 4 — Ledger and custody foundation | Exact accounting, balances, holds, Zetmond-managed custody interfaces, protected signing, unique operation IDs and event processing | Financial invariants, concurrency, event deduplication and recovery tests |
 | 5 — Customer wallet | Overview, TRC-20 receiving addresses, deposits, quoted/authorized withdrawals, status recovery and receipts | End-to-end verified wallet flows and unknown-outcome recovery |
 | 6 — Marketplace and advertisers | Buy/Sell offers, filters, approved tiers, applications, collateral, offer management and inventory reservations | Eligible offer management and prevention of inventory over-allocation |
-| 7 — Agreements and invoices | Order acceptance, protected destinations, fixed rates, exact fees and immutable versioned invoices | Accepted terms preserved; monetary calculation and acceptance tests |
+| 7 — Agreements and invoices | Private buyer–seller trade chat, independent matching rate/currency/quantity submissions, role-specific mismatch errors, mutual version-bound confirmation, protected destinations, exact fees and immutable accepted invoices | Negotiation/matching, direct API guards, stale-confirmation/concurrency, monetary calculation and acceptance tests |
 | 8 — Account services and operational foundations | Activity, notifications, settings/security, support, approved policies, monitoring, backups and reconciliation processing | Working customer services and tested operational foundations |
 | **9 — Vault (second to last)** | Trade-linked collection instructions, internal seller funding, 20/15-minute deadlines, payment verification, seller-first settlement, cancellation/refunds, late receipts and partial-success recovery | Both funding orders, boundary/expiry, mismatch, duplicate, restart and settlement/refund race tests |
 | **10 — Admin portal (last) and final release validation** | Role-protected admin workspace, KYC/advertiser queues, user/trade investigations, financial recovery, reconciliation, support, configuration and protected audit history; final cross-product validation | Audited authorized actions, second-admin approval controls and applicable production release-gate evidence |
@@ -1464,7 +1504,7 @@ Server events provide evidence of financial outcomes. A browser click named “p
 
 ### 23.1 Status and authority
 
-The following answers were explicitly supplied or approved by the owner in the decision review ending 3 November 2026 (Africa/Lagos). “Approved” records product intent, not implementation completion or provider/legal feasibility. “Approved baseline; details TBD” means only the stated baseline is approved. Resolve remaining details before enabling the affected operation. The original O01–O29 identifiers are retained.
+The following answers were explicitly supplied or approved by the owner in the decision review ending 3 November 2026 (Africa/Lagos), with O10/O23 updated by the owner's negotiated-price approval and O25/O26 updated by the Render API hosting choice on 5 November 2026. “Approved” records product intent, not implementation completion or provider/legal feasibility. “Approved baseline; details TBD” means only the stated baseline is approved. Resolve remaining details before enabling the affected operation. The original O01–O29 identifiers are retained.
 
 ### O01 — Launch countries and markets — Approved
 
@@ -1534,9 +1574,11 @@ Use a unique fiat collection account per trade and a unique trade reference for 
 
 Admins review applications and tier changes against eligibility. Meeting numerical thresholds creates eligibility for review, not an automatic upgrade. Restrictions stop new offers while preserving active trades and obligations. Release collateral only after active obligations and disputes are resolved. No automatic collateral deductions; permissible deduction grounds, amounts and process remain TBD. O21's second-approval requirement does not itself authorize a deduction.
 
-### O10 — Acceptance and activation — Approved
+### O10 — Acceptance and activation — Approved; updated 5 November 2026
 
-Publishing an offer counts as advertiser acceptance. The customer's acceptance of the final invoice activates the agreement only after both funding instructions are available. The initial 20-minute funding window begins at that activation point. Atomically validate eligibility, current offer version, inventory and protected invoice terms.
+Publishing an offer establishes the advertised rate, not final acceptance. Buyer and seller may negotiate another rate in private trade chat. Each independently submits matching rate, fiat currency and USDT quantity; both then confirm the same final invoice version, including fees and exact deposits. Missing or mismatched submissions disable Trade with role-specific feedback, and the backend rejects activation. Chat messages alone cannot accept terms or prove payment.
+
+Activate only after both current confirmations and both funding instructions are available, atomically validating matching terms, eligibility, offer/inventory availability and protected invoice terms. The initial 20-minute funding window begins once at activation, never during negotiation, a mismatch or provisioning delay. Pre-activation changes invalidate both confirmations; accepted active invoices and deadlines cannot be altered by later chat/advert edits. The first qualifying payment still starts a fresh 15-minute window under O11. This replaces the earlier advertiser-acceptance-by-publication decision.
 
 ### O11 — Payment event and deadline interpretation — Approved baseline; provider mechanics TBD
 
@@ -1605,12 +1647,12 @@ Collateral deductions, exceptional financial adjustments and sensitive financial
 
 Every customer must verify **both email and phone** before wallet or trading access, not only advertisers. Server-side gating applies to direct API calls as well as UI actions.
 
-### O23 — Marketplace behaviour and inventory — Approved baseline; metrics definitions TBD
+### O23 — Marketplace behaviour and inventory — Approved baseline; chat updated 5 November 2026; metrics definitions TBD
 
 - Filters: currency, amount and advertiser category.
-- Default sorting: best price from the viewer's Buy/Sell perspective.
+- Default sorting: best advertised price from the viewer's Buy/Sell perspective; a privately negotiated trade rate does not rewrite the public advert.
 - Show only real completed-trade metrics; exact formulas, periods and tie-breaks remain to be specified.
-- No public reviews or user-to-user chat at launch.
+- Private buyer–seller chat linked to a proposed trade is included at launch for negotiation, with durable messages and participant authorization. Public reviews, public chat rooms and general social messaging remain excluded. This supersedes the earlier exclusion of user-to-user trade chat.
 - Reserve offer inventory when a trade activates; release unused reservations after cancellation.
 - Inventory reservations are not Vault funding and must not start the 15-minute clock.
 - Apply atomic quantity/version checks to prevent over-allocation. Releasing offer inventory cannot release funds still owed under a payout/refund obligation.
@@ -1633,13 +1675,14 @@ Every customer must verify **both email and phone** before wallet or trading acc
 - Background jobs: Redis/BullMQ with database-backed recovery; Redis is not the ledger.
 - Permitted documents: private encrypted object storage.
 - One repository contains the existing marketing site, customer app, admin app and backend. Preserve the completed marketing implementation.
-- Custody signing/key-management infrastructure, hosting/services, exact versions and final deployment/accounting design remain to be selected. A shared repository does not imply shared production credentials or admin permissions.
+- Hosting update, 5 November 2026: Render for NestJS APIs; Vercel for the existing marketing and customer frontends. Deployment/connectivity requirements are in Section 16.7.
+- Custody signing/key-management infrastructure, database/Redis/storage providers and service plans, exact versions and final deployment/accounting design remain to be selected. A shared repository does not imply shared production credentials or admin permissions.
 
-### O26 — Shared login, domains and deployment — Shared login approved; exact domains TBD
+### O26 — Shared login, domains and deployment — Shared login approved; Render/Vercel hosting recorded 5 November 2026; custom domains TBD
 
 The owner replaced the separate-login-page requirement: customers and admins log in on the **same page**. Admin login details are provisioned in the database in advance; store passwords as secure hashes, never plaintext. The backend authenticates, checks the account role, enforces mandatory admin MFA and redirects to the appropriate portal. Every privileged request rechecks authorization. There is no public admin signup.
 
-The owner plans to purchase a domain; no exact domain name, ownership or final subdomain topology was confirmed. Earlier example hostnames were suggestions only. Final hosting, deployment/access rules and cross-origin/session design remain TBD; retain production/staging separation, HTTPS and isolated privileged access as required safeguards.
+The owner plans to purchase a custom domain; no final custom-domain name or subdomain topology was confirmed. Current owner-supplied frontend addresses are `https://zetmond-crypto-wallet-system.vercel.app` for marketing and `https://zetmond.vercel.app` for the customer app. Render is selected for APIs; its actual service URL remains TBD. Follow Section 16.7 for the Vercel-to-Render API proxy and origin configuration. Final admin hosting, deployment/access configuration and verified session behaviour remain implementation decisions/checks; retain production/staging separation, HTTPS and isolated privileged access as required safeguards.
 
 ### O27 — Visual and responsive baseline — Approved
 
@@ -1680,7 +1723,7 @@ The question review is complete, but these items remain open. Approval of an exc
 | Identity/security | KYC provider/documents, restriction exceptions, exact timeouts/lockouts and recovery procedures | O19/O20 |
 | Administration | Action/approval matrix, permitted financial adjustments, provisioning and actual second approver | O21 |
 | Support/privacy | Retention, dispute liability, appeals/escalation limits, staffing, holiday coverage and evidence totals | O24 |
-| Infrastructure | Hosting, exact domain(s), deploy/session configuration and operational service selections | O25/O26 |
+| Infrastructure | Render API URL/service plan, database/Redis/storage hosting, custom/admin domains, deploy/session verification and operational service selections; API host Render and frontend host Vercel are selected | O25/O26; Section 16.7 |
 | Service commitments | Performance budgets, availability definitions, actual on-call coverage and verified restore/incident targets | O28 |
 | Planning | Budget, expected volume and any future schedule; specialist/operational responsibilities | O29 |
 
@@ -1696,7 +1739,7 @@ Resolve applicable blockers before enabling real financial capabilities. Feature
 | D25; prototype cover and Section 18 | BR-24; Sections 1.3, 17.5, 20 and 21 | Production instruction supersedes customer simulation; isolated test environments remain necessary |
 | Section 7 / ACC | Sections 4 and 7 | Real identity, contact, eligibility and access enforcement |
 | Section 8 / WAL | Section 8 | Real custody/ledger flows, exact fees and recovery |
-| Section 9 / P2P and advertiser model | Section 9 | Fixed-rate offers, approved categories and protected inventory |
+| Section 9 / P2P and advertiser model | Sections 9–10; O10/O23 | Advertised rates, private negotiation, matching submissions, mutual acceptance, approved categories and protected inventory; negotiated-price correction supersedes fixed-advert-price-only trading |
 | Section 10 / FEE | Section 10 | 0.5% each, deposit addition, immutable invoice and unresolved bank-charge/rounding policy |
 | Section 11 / VLT | Sections 11–12 | 20/15-minute rules, both funding orders, review, separate settlement and refunds |
 | Section 12 / page inventory | Section 15 | Complete logical screens plus desktop/mobile treatment and production states |
