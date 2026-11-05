@@ -139,7 +139,7 @@ test("public forms remain usable from small phones to desktop", async ({
   });
 });
 
-test("customer registration, contact verification and login are durable and keep KYC gated", async ({
+test("customer registration, email-only verification and login are durable and keep KYC gated", async ({
   page,
 }) => {
   const errors = [];
@@ -148,13 +148,19 @@ test("customer registration, contact verification and login are durable and keep
   await register(page, email, "+2348031234571");
   await page.reload();
   const ms = await messages(email);
-  for (const purpose of ["email", "phone"]) {
+  await expect(
+    page.getByRole("heading", { name: "Phone number", exact: true }),
+  ).toHaveCount(0);
+  expect(ms.some((m) => m.text.includes("phone verification code"))).toBe(
+    false,
+  );
+  for (const purpose of ["email"]) {
     const code = ms
       .find((m) => m.text.includes(`${purpose} verification code`))
       .text.match(/\b\d{6}\b/)[0];
     const panel = page.locator("section").filter({
       has: page.getByRole("heading", {
-        name: purpose === "email" ? "Email address" : "Phone number",
+        name: "Email address",
         exact: true,
       }),
     });

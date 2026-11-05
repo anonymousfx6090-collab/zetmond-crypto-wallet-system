@@ -28,8 +28,6 @@ const schema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   MAIL_FROM: z.string().optional(),
-  SMS_GATEWAY_URL: z.string().url().optional(),
-  SMS_GATEWAY_TOKEN: z.string().optional(),
 });
 export type Config = z.infer<typeof schema>;
 export function loadConfig(env = process.env): Config {
@@ -54,15 +52,9 @@ export function loadConfig(env = process.env): Config {
       throw new Error(
         "Production requires approved HTTPS terms and privacy notice URLs",
       );
-    if (
-      !c.APP_ORIGIN.startsWith("https://") ||
-      !c.SMTP_HOST ||
-      !c.MAIL_FROM ||
-      !c.SMS_GATEWAY_URL?.startsWith("https://") ||
-      !c.SMS_GATEWAY_TOKEN
-    )
+    if (!c.APP_ORIGIN.startsWith("https://") || !c.SMTP_HOST || !c.MAIL_FROM)
       throw new Error(
-        "Production requires HTTPS and configured email/SMS delivery",
+        "Production requires HTTPS and configured email delivery",
       );
   }
   return c;

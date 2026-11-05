@@ -30,7 +30,7 @@ export const loginSchema = z
   .strict();
 export const verifySchema = z
   .object({
-    purpose: z.enum(["email", "phone"]),
+    purpose: z.literal("email"),
     code: z.string().regex(/^\d{6}$/),
   })
   .strict();

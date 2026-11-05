@@ -3,7 +3,10 @@ import { loadConfig } from "./config";
 async function main() {
   const config = loadConfig();
   const runtime = await createApp(config);
-  await runtime.app.listen(config.PORT, "127.0.0.1");
+  await runtime.app.listen(
+    config.PORT,
+    config.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1",
+  );
   let running = false;
   const timer = setInterval(async () => {
     if (running) return;

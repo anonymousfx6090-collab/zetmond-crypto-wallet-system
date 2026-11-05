@@ -13,7 +13,7 @@ export class Delivery {
   async enqueue(
     c: PoolClient,
     userId: string,
-    channel: "email" | "sms",
+    channel: "email",
     message: Message,
     expiresAt?: Date,
   ) {
@@ -35,7 +35,7 @@ export class Delivery {
     if (this.config.DELIVERY_MODE === "development") return; // Encrypted local outbox; never expose a debug API.
     await this.db.tx(async (c) => {
       const rows = await c.query(
-        "SELECT * FROM delivery_outbox WHERE status='queued' AND next_attempt_at<=now() ORDER BY created_at LIMIT 5 FOR UPDATE SKIP LOCKED",
+        "SELECT * FROM delivery_outbox WHERE channel='email' AND status='queued' AND next_attempt_at<=now() ORDER BY created_at LIMIT 5 FOR UPDATE SKIP LOCKED",
       );
       for (const row of rows.rows) {
         try {
@@ -43,48 +43,28 @@ export class Delivery {
             this.config.DATA_ENCRYPTION_KEY,
             row.payload,
           );
-          if (row.channel === "email") {
-            const transport = nodemailer.createTransport({
-              host: this.config.SMTP_HOST,
-              port: this.config.SMTP_PORT,
-              secure: this.config.SMTP_PORT === 465,
-              requireTLS: true,
-              connectionTimeout: 10000,
-              socketTimeout: 15000,
-              auth: this.config.SMTP_USER
-                ? {
-                    user: this.config.SMTP_USER,
-                    pass: this.config.SMTP_PASSWORD,
-                  }
-                : undefined,
-            });
-            if (!this.config.SMTP_HOST || !this.config.MAIL_FROM)
-              throw new Error("Email not configured");
-            await transport.sendMail({
-              from: this.config.MAIL_FROM,
-              to: m.to,
-              subject: m.subject,
-              text: m.text,
-            });
-          } else {
-            if (!this.config.SMS_GATEWAY_URL || !this.config.SMS_GATEWAY_TOKEN)
-              throw new Error("SMS not configured");
-            const r = await fetch(this.config.SMS_GATEWAY_URL, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${this.config.SMS_GATEWAY_TOKEN}`,
-                "Idempotency-Key": row.id,
-              },
-              body: JSON.stringify({
-                to: m.to,
-                text: m.text,
-                reference: row.id,
-              }),
-              signal: AbortSignal.timeout(15000),
-            });
-            if (!r.ok) throw new Error("Delivery rejected");
-          }
+          const transport = nodemailer.createTransport({
+            host: this.config.SMTP_HOST,
+            port: this.config.SMTP_PORT,
+            secure: this.config.SMTP_PORT === 465,
+            requireTLS: true,
+            connectionTimeout: 10000,
+            socketTimeout: 15000,
+            auth: this.config.SMTP_USER
+              ? {
+                  user: this.config.SMTP_USER,
+                  pass: this.config.SMTP_PASSWORD,
+                }
+              : undefined,
+          });
+          if (!this.config.SMTP_HOST || !this.config.MAIL_FROM)
+            throw new Error("Email not configured");
+          await transport.sendMail({
+            from: this.config.MAIL_FROM,
+            to: m.to,
+            subject: m.subject,
+            text: m.text,
+          });
           await c.query(
             "UPDATE delivery_outbox SET status='delivered',payload='',delivered_at=now() WHERE id=$1",
             [row.id],

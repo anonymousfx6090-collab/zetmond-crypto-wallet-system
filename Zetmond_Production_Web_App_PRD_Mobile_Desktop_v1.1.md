@@ -10,7 +10,7 @@
 | Delivery intent | A production service for real users, real identity verification and real funds |
 | Document status | Owner-approved decisions recorded in Section 23; remaining details and launch blockers remain explicit |
 | Primary source | `Zetmond_Product_Requirements_Document_v1.0.md`, dated 19 October 2026 |
-| Authoritative update | Owner decision review and shared login: 3 November 2026; negotiated-price chat, matching submissions, funding activation and Render API hosting: 5 November 2026 · Africa/Lagos |
+| Authoritative update | Owner decision review and shared login: 3 November 2026; negotiated-price chat, matching submissions, funding activation, Render API hosting and email-only verification: 5 November 2026 · Africa/Lagos |
 | Platforms | Responsive browser application: desktop, tablet, phone and intermediate widths |
 | Related surfaces | Existing public marketing site; customer web application; separate admin portal |
 | Schedule | No launch date or delivery estimate has been approved |
@@ -33,6 +33,8 @@ This revision preserves the uploaded v1.0 production requirements and records th
 **Negotiated-price correction — owner-approved 5 November 2026:** buyers and sellers may negotiate in private trade chat, including a rate different from the advert. Each party submits their own trade details. Rate, fiat currency and USDT quantity must match, and both parties must confirm the same final invoice before activation. The initial 20-minute funding window begins only after that confirmation and availability of both funding instructions. This supersedes the earlier fixed-advert-price-only flow, advertiser acceptance by publication, and exclusion of trade chat; see Sections 9–11 and decisions O10/O23. Vault remains Task 9 and the admin portal remains Task 10.
 
 **API hosting — owner-selected 5 November 2026:** use Render for the NestJS APIs; retain the marketing and customer frontends on Vercel. See Section 16.7 and O25/O26 for connectivity and deployment requirements. Selecting hosting does not claim that an API deployment or its production dependencies are configured.
+
+**Email-only verification — owner-approved 5 November 2026:** SMS is excluded. Customers and advertisers verify email; a phone number is contact information and is not treated as verified or required to pass phone verification for access. This supersedes earlier verified-phone requirements, SMS delivery dependencies and the old O22/O24 wording. Existing KYC, verified bank ownership and authenticator-app MFA requirements still apply.
 
 **Current delivery context:** budget and launch volume are TBD, no launch date is set, and development is planned with the product owner and AI assistant. Operational responders, independent assessments and any specialist responsibilities must still be assigned before launch; they are not supplied by this development arrangement.
 
@@ -187,7 +189,7 @@ These rules carry forward from the main PRD unless specifically superseded above
 | BR-17 | Incorrect fiat amount, whether too low or too high, cancels the trade and triggers the applicable returns. |
 | BR-18 | An incorrect in-app seller USDT amount is blocked and the exact required amount is shown. |
 | BR-19 | Approved KYC is required before wallet or trading use. |
-| BR-20 | Advertisers require verified identity, phone, email, bank-name match and the applicable security deposit. |
+| BR-20 | Advertisers require verified identity and email, bank-name match and the applicable security deposit. Phone verification/SMS is not required. |
 | BR-21 | Advertiser categories: General—Beginner, Regular, Veteran; Verified—Bronze, Silver, Gold; Block as a separate category. Numeric criteria remain open. |
 | BR-22 | Marketing, customer app and admin portal remain separate surfaces. Customers and admins share one login page; backend role checks route accounts and protect admin operations. Admin has one initial role and no public signup. |
 | BR-23 | Delivery is responsive web for desktop, tablets and phones. Preserve the existing purple identity and overall customer-app structure. |
@@ -385,9 +387,11 @@ Production screens must not contain “All 95 screens,” “UI review,” sampl
 
 **Decisions required:** registration fields, minimum age/eligibility, ordinary customer contact requirements, provider/document rules and permitted country changes: O01/O05/O19/O22.
 
-### 7.2 Email and phone verification
+### 7.2 Email-only verification
 
-Advertisers must have both verified contacts. Under O22, ordinary customers must also verify both email and phone before financial access. Provide verification, resend, invalid/expired code, delivery failure and change-contact flows as required by the chosen policy.
+Advertisers and ordinary customers must verify email before financial access under O22. Provide email verification, resend, invalid/expired code and delivery failure handling. Phone numbers may be collected/validated as contact information but are not proof of ownership, a verification gate, or a recovery/MFA factor. Do not queue SMS or expose phone-code verification/resend controls. Direct requests to perform phone verification must be rejected. Preserve KYC, bank-ownership and authenticator-app MFA requirements.
+
+On upgrade, cancel and clear pending legacy SMS and consume outstanding phone challenges without setting any user's phone or email verification flag. Existing historical phone-verification evidence may remain stored but does not determine eligibility under this policy.
 
 Codes must be server-issued, purpose-bound, time-limited, resistant to guessing and single-use where applicable. Exact lifetimes, attempt limits and delivery providers require configuration approval. A customer cannot set a verified flag through a browser request.
 
@@ -526,7 +530,7 @@ Reserve offer inventory atomically at activation under O23/O03. Chat and draft a
 
 ### 9.3 Advertiser eligibility and application
 
-Required eligibility components: approved KYC, verified email, verified phone, bank-name match and configured security deposit. Show fulfilled, missing, pending and failed checks separately.
+Required eligibility components: approved KYC, verified email, bank-name match and configured security deposit. Phone verification is not required. Show fulfilled, missing, pending and failed checks separately.
 
 Application records include requested category, evidence references, submitted rule version, review result, reason, timestamps and actor. Approvals cannot be created by toggling a client flag. Do not seed fake production advertisers or silently waive deposits to create initial liquidity.
 
@@ -824,7 +828,7 @@ Required event categories for product review: KYC outcomes, agreement/acceptance
 - Keep unread/read state synchronized where supported.
 - Notification delivery failure must not affect a trade's financial status or extend its timer.
 - External-channel previews must not expose full sensitive amounts, bank details or identity evidence by default.
-- In-app delivery is the proposed baseline; email, SMS, push, reminder timing, mandatory notices and preference rules require O24/O22.
+- In-app and email delivery follow O24/O22. SMS is excluded. Push, reminder timing, mandatory notices and preference rules require separate approval where not already specified.
 
 ### 13.3 Security and settings
 
@@ -919,7 +923,7 @@ Each row is a logical product screen. Some states can share a route/component; t
 |---|---|---|---|---|
 | UI-A01 | Registration | Approved fields, country eligibility, terms acceptance, validation | Form plus supporting copy | Single-column form; no unnecessary hero taking first-screen priority |
 | UI-A02 | Email verification | Code/link, resend, expiry/error/delivery states | Focused panel | Full-width input with accessible paste |
-| UI-A03 | Phone verification | Number, country code, verification, resend/status | Focused panel | Appropriate input mode; clear number confirmation |
+| UI-A03 | Phone verification — retired | No SMS/phone-code screen or access gate; registration phone input remains contact information | No verification panel | No verification panel |
 | UI-A04 | Customer login | Credentials, recovery and approved MFA routing | Distinct customer access layout | Compact form with keyboard-safe CTA |
 | UI-A05 | MFA challenge | Approved method, failure/recovery entry | Focused challenge | Paste/autofill where permitted; no hidden fields |
 | UI-A06 | Forgot password | Recovery request and non-revealing acknowledgement | Focused form | Same secure flow |
@@ -995,7 +999,7 @@ Each row is a logical product screen. Some states can share a route/component; t
 | UI-C08 | Banks | Verified/pending/failed account list | Table/cards | Cards with masked details |
 | UI-C09 | Add/verify bank | Supported bank, account input, name result and authorization | Form + result | Step flow with correct input mode |
 | UI-C10 | Bank verification result | Matched/pending/mismatch/unavailable | Detail | Clear next action |
-| UI-C11 | Contact changes | Email/phone re-verification and security | Guided form | Step flow |
+| UI-C11 | Contact changes | Email re-verification and protected contact edits; no SMS or phone verification | Guided form | Step flow |
 | UI-C12 | Notification preferences | Approved channels and mandatory notices | Grouped controls | Labelled touch controls |
 | UI-C13 | Notifications | Read/unread and authorized record links | Panel/page | Full-page list |
 | UI-C14 | Support home | Help categories, search and contact/case entry | Search and category cards | Search and stacked categories |
@@ -1191,7 +1195,7 @@ Customer-facing fees must account for the approved platform/network charging mod
 
 Select providers/processes that support the launch countries and approved evidence. Document required versus optional data, result authenticity, failure/retry behaviour, retention responsibilities and support escalation.
 
-Contact verification and notifications require delivery-state handling. Email/SMS failure must not turn an unverified contact into a verified one. Bank-name lookup failure must not become a successful ownership match.
+Email verification and notifications require delivery-state handling. Email failure must not turn an unverified email into a verified one. SMS is not a provider dependency. Bank-name lookup failure must not become a successful ownership match.
 
 ### 17.5 Environment separation
 
@@ -1403,6 +1407,9 @@ Each test record must identify requirement, preconditions, input/event, expected
 | AT-66 | Configuration changes fees/limits | Approved future-effective version; accepted order terms unchanged |
 | AT-67 | Restricted account has an ongoing financial obligation | Apply approved restriction/recovery policy while preserving evidence and liabilities |
 | AT-68 | Admin attempts direct balance alteration or unapproved force-completion | Operation unavailable/rejected and auditable |
+| AT-77 | Customer verifies email while phone remains unverified | Email-only onboarding completes; KYC and other financial eligibility controls still apply; no fake phone verification |
+| AT-78 | Registration, phone-code requests and production email configuration without SMS credentials | Only email is queued; phone verify/resend rejected; SMS credentials not required; working SMTP and other production safeguards still required |
+| AT-79 | Upgrade a database with pending SMS and unused phone codes | SMS cancelled and payload cleared; phone codes consumed; user verification flags unchanged |
 
 ### 20.5 Tests blocked by unresolved policy
 
@@ -1504,7 +1511,7 @@ Server events provide evidence of financial outcomes. A browser click named “p
 
 ### 23.1 Status and authority
 
-The following answers were explicitly supplied or approved by the owner in the decision review ending 3 November 2026 (Africa/Lagos), with O10/O23 updated by the owner's negotiated-price approval and O25/O26 updated by the Render API hosting choice on 5 November 2026. “Approved” records product intent, not implementation completion or provider/legal feasibility. “Approved baseline; details TBD” means only the stated baseline is approved. Resolve remaining details before enabling the affected operation. The original O01–O29 identifiers are retained.
+The following answers were explicitly supplied or approved by the owner in the decision review ending 3 November 2026 (Africa/Lagos), with O10/O23 updated by the owner's negotiated-price approval, O25/O26 by the Render API hosting choice, and O22/O24 by the email-only/no-SMS decision on 5 November 2026. “Approved” records product intent, not implementation completion or provider/legal feasibility. “Approved baseline; details TBD” means only the stated baseline is approved. Resolve remaining details before enabling the affected operation. The original O01–O29 identifiers are retained.
 
 ### O01 — Launch countries and markets — Approved
 
@@ -1562,7 +1569,7 @@ Use a unique fiat collection account per trade and a unique trade reference for 
 | Block | Separate category | Individually approved | Individually approved |
 
 - Fiat limits use the corresponding value; the exact conversion/version policy remains to be specified.
-- Every advertiser needs approved KYC, verified email and phone, bank-name match, the funded security deposit and no unresolved account restrictions.
+- Every advertiser needs approved KYC, verified email, bank-name match, the funded security deposit and no unresolved account restrictions. Phone verification is excluded by the email-only policy.
 - Regular eligibility: at least 30 completed trades over 30 days.
 - Veteran eligibility: at least 100 completed trades over 90 days.
 - Verified levels require manual business/risk review, relevant trading history and sufficient liquidity; detailed level-specific criteria remain TBD.
@@ -1643,9 +1650,9 @@ The owner provisions individually named admin accounts with mandatory MFA and on
 
 Collateral deductions, exceptional financial adjustments and sensitive financial configuration changes require approval by a second named admin. The initiator cannot approve their own request. This control does not establish otherwise-unapproved deduction grounds or adjustment powers; the detailed action/approval matrix and thresholds remain TBD. Admin API enforcement is independent of the shared login redirect.
 
-### O22 — Ordinary customer contact checks — Approved
+### O22 — Ordinary customer contact checks — Approved; email-only update 5 November 2026
 
-Every customer must verify **both email and phone** before wallet or trading access, not only advertisers. Server-side gating applies to direct API calls as well as UI actions.
+Every customer and advertiser must verify **email** before wallet or trading access. SMS/phone verification is not required, and unverified phone contact information must not be presented as verified. Server-side gating applies to direct API calls as well as UI actions. KYC, bank ownership where applicable and authenticator-app MFA are separate requirements and remain enforced. This supersedes the earlier requirement to verify both contacts.
 
 ### O23 — Marketplace behaviour and inventory — Approved baseline; chat updated 5 November 2026; metrics definitions TBD
 
@@ -1659,7 +1666,7 @@ Every customer must verify **both email and phone** before wallet or trading acc
 
 ### O24 — Notifications, support and evidence — Approved baseline; retention/liability TBD
 
-- Notifications: in-app and email. SMS is for phone verification only at launch.
+- Notifications and account delivery: in-app and email as applicable. SMS is excluded, including phone verification. The owner chose personal Gmail SMTP for email setup; delivery, sender configuration and provider limits still need verification.
 - Customers may submit support cases at any time.
 - Staffed hours: Monday–Friday, 09:00–18:00 **Africa/Lagos**.
 - Target first response: within one business day; this is a first-response target, not a resolution or refund guarantee.
