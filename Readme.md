@@ -29,16 +29,19 @@ these commands from the repository root in three separate terminals:
 “Get started” and “Create an account” open `/register` in the customer app;
 “Log in” opens `/login`. This includes the desktop header, mobile menu, hero and footer.
 
-Account links default to `http://127.0.0.1:4200` for local use. To use another address,
-create `marketing/.env.local` using [marketing/.env.example](marketing/.env.example)
-and set `NEXT_PUBLIC_CUSTOMER_APP_ORIGIN` to the customer app's origin.
+Account links default to the hosted customer app at `https://zetmond.vercel.app`.
+For local development, create `marketing/.env.local` using
+[marketing/.env.example](marketing/.env.example) and set
+`NEXT_PUBLIC_CUSTOMER_APP_ORIGIN=http://127.0.0.1:4200`.
 For VS Code forwarded ports, use the browser-visible address for port 4200 and
 set the API's `APP_ORIGIN` to that same origin.
 
-For deployment, set `NEXT_PUBLIC_CUSTOMER_APP_ORIGIN` to the deployed customer's
-HTTPS origin in the build environment or `marketing/.env.local` before building.
-The default loopback address is for local use. The origin is embedded in the
-marketing build; rebuild after changing it.
+For deployment, no origin setting is required to use `https://zetmond.vercel.app`.
+An existing `NEXT_PUBLIC_CUSTOMER_APP_ORIGIN` setting overrides that default;
+remove any old localhost value or set it to `https://zetmond.vercel.app` in the
+marketing project's Vercel environment variables. The origin is embedded in the
+marketing build; rebuild and redeploy after changing it. Deploy the branch that
+contains the account-link changes so the marketing buttons use these destinations.
 
 ```sh
 pnpm build
@@ -105,7 +108,8 @@ overflow, mobile navigation, policy routes, and the missing-page screen.
 Theme checks cover saved preferences, live system changes, keyboard/mobile controls,
 initial rendering, and browsers with storage disabled.
 
-No public deployment or external service connection is configured.
+The hosted customer-app origin is configured for account links. Vercel deployment
+settings and backend service configuration are managed separately.
 
 ## Customer accounts and authentication (Task 2)
 

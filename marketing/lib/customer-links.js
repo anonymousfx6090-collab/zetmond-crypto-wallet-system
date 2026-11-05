@@ -1,6 +1,6 @@
 // Public destinations are fixed when Next.js builds the marketing app.
 const configuredOrigin = process.env.NEXT_PUBLIC_CUSTOMER_APP_ORIGIN;
-const origin = new URL(configuredOrigin || 'http://127.0.0.1:4200');
+const origin = new URL(configuredOrigin || 'https://zetmond.vercel.app');
 if (
   !['http:', 'https:'].includes(origin.protocol) ||
   origin.username || origin.password || origin.pathname !== '/' ||

@@ -146,7 +146,7 @@ The marketing site and customer app share one repository but run as separate Nex
 
 Run the customer and API commands in separate terminals. Local PostgreSQL, migrations and `apps/api/.env` must be configured for authentication to work; follow the [Task 2 local setup](task-2-authentication.md#local-setup). Keep existing encryption keys stable when restarting an existing database.
 
-The marketing account buttons now open the customer app's registration/login pages. For VS Code Remote/Codespaces, forward the customer port 4200 and the marketing port 4173 when previewing both. If the browser uses a forwarded HTTPS customer address, configure the API's `APP_ORIGIN` and marketing's `NEXT_PUBLIC_CUSTOMER_APP_ORIGIN` to that exact customer origin. Restart the API and marketing dev server; rebuild marketing when using a production build. The browser calls the customer app's `/api` proxy, so the API need not be exposed as a separate public port.
+The marketing account buttons default to the hosted customer app at `https://zetmond.vercel.app`. To preview the local registration/login pages, set `NEXT_PUBLIC_CUSTOMER_APP_ORIGIN=http://127.0.0.1:4200` in `marketing/.env.local`. For VS Code Remote/Codespaces, forward the customer port 4200 and the marketing port 4173 when previewing both. If the browser uses a forwarded HTTPS customer address, configure the API's `APP_ORIGIN` and marketing's `NEXT_PUBLIC_CUSTOMER_APP_ORIGIN` to that exact customer origin. Restart the API and marketing dev server; rebuild marketing when using a production build. The browser calls the customer app's `/api` proxy, so the API need not be exposed as a separate public port.
 
 ## Completion boundary
 

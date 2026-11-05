@@ -50,7 +50,7 @@ test('product FAQ works and account links target the customer app', async ({ pag
   await page.getByText('Do both sides have to fund a trade?', { exact: true }).click();
   await expect(page.locator('details[open]')).toContainText('Either party can fund first');
   await expect(page.locator('body')).not.toContainText(/prototype|simulation|simulated|marketing preview|TBD|we’re building/i);
-  const customerOrigin = process.env.NEXT_PUBLIC_CUSTOMER_APP_ORIGIN || 'http://127.0.0.1:4200';
+  const customerOrigin = process.env.NEXT_PUBLIC_CUSTOMER_APP_ORIGIN || 'https://zetmond.vercel.app';
   for (const [name, path, count] of [[/Get started|Create an account/, '/register', 6], [/Log in/, '/login', 2]]) {
     const links = page.getByRole('link', { name, includeHidden: true });
     await expect(links).toHaveCount(count);
