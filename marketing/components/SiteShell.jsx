@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowDownRight, ArrowUpRight, Menu, X } from 'lucide-react';
 import ThemePicker, { ThemeOptions } from './ThemePicker';
+import { customerLinks } from '../lib/customer-links';
 
 export function Brand({ footer = false, onClick }) {
   return (
@@ -65,8 +66,8 @@ export default function SiteShell({ children }) {
           </nav>
           <div className="flex items-center gap-2 sm:gap-4">
           <div className="hidden items-center gap-5 lg:flex">
-            <button className="nav-link" type="button" disabled>Log in</button>
-            <button className="button button-primary !min-h-11 !px-5 !text-[13px]" type="button" disabled>Get started <ArrowUpRight size={16} /></button>
+            <a className="nav-link" href={customerLinks.login}>Log in</a>
+            <a className="button button-primary !min-h-11 !px-5 !text-[13px]" href={customerLinks.register}>Get started <ArrowUpRight size={16} /></a>
           </div>
           <ThemePicker />
           <button ref={menuButton} className="grid size-11 place-items-center rounded-lg border border-ink/15 bg-ink/3 transition hover:bg-purple/10 lg:hidden" aria-expanded={menuOpen} aria-controls="mobile-menu" aria-haspopup="dialog" aria-label="Open menu" onClick={() => setMenuOpen(true)} type="button"><Menu size={22} /></button>
@@ -82,9 +83,9 @@ export default function SiteShell({ children }) {
               <p className="mt-6 max-w-64 font-display text-2xl font-semibold leading-snug tracking-tight text-ink">A world of possibility.<br /><span className="text-muted">One USDT wallet.</span></p>
               <p className="mt-4 max-w-64 text-sm leading-7 text-muted">Hold, send, and trade with a clearer view of every step.</p>
             </div>
-            <div><h2 className="footer-heading">PRODUCT</h2><div className="footer-links"><Link href="/#wallet">USDT wallet</Link><Link href="/#how-it-works">The two-sided Vault</Link><Link href="/vault-policy#fees">Fees & funding windows</Link><button type="button" disabled>Get started <ArrowUpRight size={13} /></button></div></div>
+            <div><h2 className="footer-heading">PRODUCT</h2><div className="footer-links"><Link href="/#wallet">USDT wallet</Link><Link href="/#how-it-works">The two-sided Vault</Link><Link href="/vault-policy#fees">Fees & funding windows</Link><a href={customerLinks.register}>Get started <ArrowUpRight size={13} /></a></div></div>
             <div><h2 className="footer-heading">RESOURCES</h2><div className="footer-links"><Link href="/vault-policy">Vault & fee rules</Link><Link href="/terms">Terms</Link><Link href="/privacy">Privacy</Link><Link href="/#faq">Common questions</Link></div></div>
-            <div><h2 className="footer-heading">GET STARTED</h2><div className="footer-links"><button type="button" disabled>Create an account <ArrowUpRight size={13} /></button><Link href="/#how-it-works">How trading works</Link></div><p className="mt-5 max-w-52 text-xs leading-6 text-muted">Understand the fees, funding windows, and settlement process before your first trade.</p></div>
+            <div><h2 className="footer-heading">GET STARTED</h2><div className="footer-links"><a href={customerLinks.register}>Create an account <ArrowUpRight size={13} /></a><Link href="/#how-it-works">How trading works</Link></div><p className="mt-5 max-w-52 text-xs leading-6 text-muted">Understand the fees, funding windows, and settlement process before your first trade.</p></div>
           </div>
           <div className="mt-6 rounded-xl border border-ink/7 bg-ink/2 px-4 py-3 text-[11px] leading-6 text-muted"><span className="font-semibold text-ink">Built for clear settlement.</span> Zetmond brings together wallet balance, funding checks, and payout flow so customers can move with confidence.</div>
           <div className="flex flex-col justify-between gap-3 pt-6 text-[11px] leading-5 text-muted sm:flex-row"><p>© 2026 Zetmond.</p><p className="flex items-center gap-2"><ArrowDownRight size={13} className="text-purple" /> Transparent fees. Faster trade flow.</p></div>
@@ -103,7 +104,7 @@ export default function SiteShell({ children }) {
         </nav>
         <div className="mt-auto pt-12">
           <div className="mb-6"><p className="eyebrow mb-3 text-muted">APPEARANCE</p><ThemeOptions /></div>
-          <div className="grid gap-3"><button className="button button-primary w-full" disabled type="button">Get started <ArrowUpRight size={18} /></button><button className="button button-outline w-full" disabled type="button">Log in</button></div>
+          <div className="grid gap-3"><a className="button button-primary w-full" href={customerLinks.register} onClick={closeMenu}>Get started <ArrowUpRight size={18} /></a><a className="button button-outline w-full" href={customerLinks.login} onClick={closeMenu}>Log in</a></div>
           <p className="mt-8 border-t border-ink/10 pt-5 text-xs leading-6 text-muted">Your USDT. Your next move.</p>
         </div>
       </div>
