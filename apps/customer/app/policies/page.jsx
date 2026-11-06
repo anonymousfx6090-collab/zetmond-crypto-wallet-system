@@ -8,8 +8,8 @@ export default function Policies() {
       <h1>Policies before launch.</h1>
       <p>
         Production terms and privacy notices require approval for each supported
-        market. This development environment is for testing account access; it
-        does not accept funds or provide live financial services.
+        market. This test environment is for testing account access; it does not
+        accept funds or provide live financial services.
       </p>
       <p>
         Account information includes your email, phone, country and security

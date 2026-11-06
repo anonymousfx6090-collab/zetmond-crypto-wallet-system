@@ -1,5 +1,5 @@
 import { createApp } from "./app";
-import { ConfigurationError, loadConfig } from "./config";
+import { ConfigurationError, deploymentStage, loadConfig } from "./config";
 async function main() {
   const config = loadConfig();
   const runtime = await createApp(config);
@@ -26,7 +26,13 @@ async function main() {
   };
   process.once("SIGINT", shutdown);
   process.once("SIGTERM", shutdown);
-  console.log(`Zetmond API listening on port ${config.PORT}`);
+  console.log(
+    `Zetmond API (${deploymentStage(config)}) listening on port ${config.PORT}`,
+  );
+  if (config.DEPLOYMENT_STAGE === "staging")
+    console.warn(
+      "Staging environment: test accounts only; financial access is disabled.",
+    );
 }
 main().catch((error: unknown) => {
   console.error(

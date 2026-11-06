@@ -112,6 +112,28 @@ test("brand assets load, appearance persists and password visibility preserves i
   expect(errors).toEqual([]);
 });
 
+test("hosted staging is clearly identified on registration and login", async ({
+  page,
+}) => {
+  const response = await page.request.get("/api/auth/policy");
+  const policy = await response.json();
+  // UI-only fixture; backend staging authorization is exercised by integration tests.
+  await page.route("**/api/auth/policy", (route) =>
+    route.fulfill({
+      json: { ...policy, development: false, deploymentStage: "staging" },
+    }),
+  );
+  for (const screen of ["register", "login"]) {
+    await page.goto(`/${screen}`);
+    const notice = page.getByRole("note", { name: "Staging environment" });
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText("Use test accounts only");
+    await expect(notice).toContainText(
+      "Wallet transfers and trading are unavailable",
+    );
+  }
+});
+
 test("public forms remain usable from small phones to desktop", async ({
   page,
 }) => {
