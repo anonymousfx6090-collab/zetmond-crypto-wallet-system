@@ -5,7 +5,7 @@ import { authenticator } from "otplib";
 import { randomBytes, randomUUID } from "node:crypto";
 import nodemailer from "nodemailer";
 import { createApp } from "../src/app";
-import { loadConfig } from "../src/config";
+import { ConfigurationError, loadConfig } from "../src/config";
 import { migrate } from "../src/migrate";
 import { provisionAdmin } from "../src/provision-admin";
 import { hash, unseal } from "../src/crypto";
@@ -528,6 +528,50 @@ test("production accepts configured email delivery without any SMS settings", ()
     () =>
       loadConfig({ ...production, SECURITY_POLICY_APPROVED: "false" } as any),
     /Production/,
+  );
+});
+
+test("production configuration reports all incomplete settings by name", () => {
+  assert.throws(
+    () => loadConfig({ ...config, NODE_ENV: "production" } as any),
+    (error: unknown) => {
+      assert.ok(error instanceof ConfigurationError);
+      for (const field of [
+        "DELIVERY_MODE",
+        "SECURITY_POLICY_APPROVED",
+        "TERMS_VERSION",
+        "TERMS_URL",
+        "PRIVACY_URL",
+        "APP_ORIGIN",
+        "SMTP_HOST",
+        "MAIL_FROM",
+      ]) {
+        assert.ok(error.message.includes(field), `Reports ${field}`);
+      }
+      assert.ok(!error.message.includes(config.DATABASE_URL));
+      assert.ok(!error.message.includes(config.DATA_ENCRYPTION_KEY));
+      return true;
+    },
+  );
+});
+
+test("invalid configuration reports field names without exposing supplied secrets", () => {
+  const secret = "private-value-do-not-log";
+  assert.throws(
+    () =>
+      loadConfig({
+        ...config,
+        DATA_ENCRYPTION_KEY: secret,
+        SMTP_PORT: secret,
+      } as any),
+    (error: unknown) => {
+      assert.ok(error instanceof ConfigurationError);
+      assert.ok(error.message.includes("DATA_ENCRYPTION_KEY"));
+      assert.ok(error.message.includes("SMTP_PORT"));
+      assert.ok(!error.message.includes(secret));
+      assert.ok(!error.message.includes(config.DATABASE_URL));
+      return true;
+    },
   );
 });
 
