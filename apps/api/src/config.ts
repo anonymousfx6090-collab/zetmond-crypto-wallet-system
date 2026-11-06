@@ -30,31 +30,44 @@ const schema = z.object({
   MAIL_FROM: z.string().optional(),
 });
 export type Config = z.infer<typeof schema>;
+export class ConfigurationError extends Error {}
+
 export function loadConfig(env = process.env): Config {
-  const c = schema.parse(env);
+  const parsed = schema.safeParse(env);
+  if (!parsed.success) {
+    const fields = [
+      ...new Set(parsed.error.issues.map((issue) => issue.path.join("."))),
+    ];
+    // Report field names only. Validation details can contain supplied secrets.
+    throw new ConfigurationError(
+      `Invalid API configuration. Check: ${fields.join(", ")}.`,
+    );
+  }
+  const c = parsed.data;
   if (new URL(c.APP_ORIGIN).origin !== c.APP_ORIGIN)
-    throw new Error(
+    throw new ConfigurationError(
       "APP_ORIGIN must be an exact origin without path or trailing slash",
     );
   if (c.NODE_ENV === "production") {
-    if (
-      c.DELIVERY_MODE !== "provider" ||
-      c.SECURITY_POLICY_APPROVED !== "true" ||
-      c.TERMS_VERSION === "development-draft"
-    )
-      throw new Error(
-        "Production requires provider delivery, approved security policy and approved terms version",
-      );
-    if (
-      !c.TERMS_URL?.startsWith("https://") ||
-      !c.PRIVACY_URL?.startsWith("https://")
-    )
-      throw new Error(
-        "Production requires approved HTTPS terms and privacy notice URLs",
-      );
-    if (!c.APP_ORIGIN.startsWith("https://") || !c.SMTP_HOST || !c.MAIL_FROM)
-      throw new Error(
-        "Production requires HTTPS and configured email delivery",
+    const requirements: [keyof Config, boolean][] = [
+      ["DELIVERY_MODE", c.DELIVERY_MODE === "provider"],
+      ["SECURITY_POLICY_APPROVED", c.SECURITY_POLICY_APPROVED === "true"],
+      [
+        "TERMS_VERSION",
+        !!c.TERMS_VERSION && c.TERMS_VERSION !== "development-draft",
+      ],
+      ["TERMS_URL", !!c.TERMS_URL?.startsWith("https://")],
+      ["PRIVACY_URL", !!c.PRIVACY_URL?.startsWith("https://")],
+      ["APP_ORIGIN", c.APP_ORIGIN.startsWith("https://")],
+      ["SMTP_HOST", !!c.SMTP_HOST],
+      ["MAIL_FROM", !!c.MAIL_FROM],
+    ];
+    const missing = requirements
+      .filter(([, valid]) => !valid)
+      .map(([field]) => field);
+    if (missing.length)
+      throw new ConfigurationError(
+        `Production requires provider delivery, approved security policy and terms, HTTPS, and configured email delivery. Check: ${missing.join(", ")}.`,
       );
   }
   return c;

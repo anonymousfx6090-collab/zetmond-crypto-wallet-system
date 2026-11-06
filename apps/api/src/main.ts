@@ -1,5 +1,5 @@
 import { createApp } from "./app";
-import { loadConfig } from "./config";
+import { ConfigurationError, loadConfig } from "./config";
 async function main() {
   const config = loadConfig();
   const runtime = await createApp(config);
@@ -28,9 +28,11 @@ async function main() {
   process.once("SIGTERM", shutdown);
   console.log(`Zetmond API listening on port ${config.PORT}`);
 }
-main().catch(() => {
+main().catch((error: unknown) => {
   console.error(
-    "API startup failed; check required configuration and migrations.",
+    error instanceof ConfigurationError
+      ? error.message
+      : "API startup failed; check required configuration and migrations.",
   );
   process.exitCode = 1;
 });

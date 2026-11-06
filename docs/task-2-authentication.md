@@ -96,6 +96,8 @@ Set `DELIVERY_MODE=provider` with working approved SMTP configuration. SMTP requ
 
 Production refuses to start with development delivery, draft terms, non-HTTPS app origin, missing provider settings, or `SECURITY_POLICY_APPROVED=false`, or missing approved HTTPS terms/privacy URLs. Never set that flag merely to silence validation. The policy values, final legal pages, provider behaviour, ingress/rate policy and deployed session isolation must be reviewed first.
 
+Startup configuration errors identify missing/invalid environment variable names without logging their values. On Render, `Migrations applied` followed by a configuration error means the migration command connected successfully; correct the listed service environment settings before redeploying. The startup logger preserves generic handling for unexpected errors so database credentials and other secrets are not printed.
+
 ## Provisional development security settings
 
 These implement configurable behaviour for testing; they are not newly approved commercial/security policy:
