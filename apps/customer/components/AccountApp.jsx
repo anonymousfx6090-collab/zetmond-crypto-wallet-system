@@ -71,7 +71,7 @@ const titles = {
   ],
   "verify-contacts": [
     "Let’s make it official",
-    "Confirm your email and phone so we know it’s really you.",
+    "Confirm your email so we know it’s really you.",
   ],
   mfa: [
     "A quick security check",
@@ -103,7 +103,7 @@ const eyebrows = {
   register: "WELCOME TO ZETMOND",
   "forgot-password": "ACCOUNT RECOVERY",
   "reset-password": "ACCOUNT RECOVERY",
-  "verify-contacts": "VERIFY YOUR CONTACTS",
+  "verify-contacts": "VERIFY YOUR EMAIL",
   mfa: "PROTECTED ACCESS",
   "mfa-setup": "ACCOUNT SECURITY",
   account: "LET’S GET STARTED",
@@ -257,13 +257,16 @@ export default function AccountApp({ screen }) {
       else setMessage(d.message);
     });
   }
-  async function verify(e, purpose) {
+  async function verify(e) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     await action(async () => {
-      const d = await api("auth/verify", { purpose, code: f.get("code") });
+      const d = await api("auth/verify", {
+        purpose: "email",
+        code: f.get("code"),
+      });
       setUser(d.user);
-      setMessage(`${purpose === "email" ? "Email" : "Phone"} verified.`);
+      setMessage("Email verified.");
     });
   }
   async function setup() {
@@ -508,68 +511,60 @@ export default function AccountApp({ screen }) {
       {!loading && user && screen === "verify-contacts" && (
         <>
           <div className="contact-grid">
-            {["email", "phone"].map((purpose) => (
-              <section className="panel" key={purpose}>
-                <div className="panel-title">
-                  {purpose === "email" ? (
-                    <Mail size={20} />
-                  ) : (
-                    <Smartphone size={20} />
-                  )}
-                  <h2>
-                    {purpose === "email" ? "Email address" : "Phone number"}
-                  </h2>
-                </div>
-                <p className="wrap">{user[purpose]}</p>
-                {user[
-                  purpose === "email" ? "emailVerified" : "phoneVerified"
-                ] ? (
-                  <p className="verified">
-                    <Check size={16} />
-                    Verified
-                  </p>
-                ) : (
-                  <>
-                    <form onSubmit={(e) => verify(e, purpose)}>
-                      <label className="field" htmlFor={`${purpose}-code`}>
-                        Six-digit code
-                        <input
-                          id={`${purpose}-code`}
-                          name="code"
-                          inputMode="numeric"
-                          autoComplete="one-time-code"
-                          pattern="[0-9]{6}"
-                          maxLength={6}
-                          required
-                        />
-                      </label>
-                      {submit("Verify")}
-                    </form>
-                    <button
-                      className="quiet resend"
-                      disabled={busy}
-                      onClick={() =>
-                        action(async () => {
-                          const d = await api("auth/resend", { purpose });
-                          setMessage(d.message);
-                        })
-                      }
-                    >
-                      Send another code
-                    </button>
-                  </>
-                )}
-              </section>
-            ))}
+            <section className="panel">
+              <div className="panel-title">
+                <Mail size={20} />
+                <h2>Email address</h2>
+              </div>
+              <p className="wrap">{user.email}</p>
+              {user.emailVerified ? (
+                <p className="verified">
+                  <Check size={16} />
+                  Verified
+                </p>
+              ) : (
+                <>
+                  <form onSubmit={verify}>
+                    <label className="field" htmlFor="email-code">
+                      Six-digit code
+                      <input
+                        id="email-code"
+                        name="code"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        pattern="[0-9]{6}"
+                        maxLength={6}
+                        required
+                      />
+                    </label>
+                    {submit("Verify")}
+                  </form>
+                  <button
+                    className="quiet resend"
+                    disabled={busy}
+                    onClick={() =>
+                      action(async () => {
+                        const d = await api("auth/resend", {
+                          purpose: "email",
+                        });
+                        setMessage(d.message);
+                      })
+                    }
+                  >
+                    Send another code
+                  </button>
+                </>
+              )}
+            </section>
           </div>
-          {user.emailVerified && user.phoneVerified && (
+          {user.emailVerified && (
             <Link className="primary" href="/account">
               Continue to your account
               <ArrowRight size={18} />
             </Link>
           )}
           <p className="small">
-            Contact verification is separate from identity verification. Wallet
+            Email verification is separate from identity verification. Wallet
             and trading access remain unavailable until KYC approval.
           </p>
         </>
@@ -686,13 +681,11 @@ export default function AccountApp({ screen }) {
                 <h2>Make yourself at home</h2>
                 <span className="step-count">
                   {
-                    [
-                      user.emailVerified,
-                      user.phoneVerified,
-                      user.kycStatus === "approved",
-                    ].filter(Boolean).length
+                    [user.emailVerified, user.kycStatus === "approved"].filter(
+                      Boolean,
+                    ).length
                   }{" "}
-                  of 3 complete
+                  of 2 complete
                 </span>
               </div>
               <p className="panel-description">
@@ -707,14 +700,6 @@ export default function AccountApp({ screen }) {
                       : "Confirm the code sent to your inbox.",
                     done: user.emailVerified,
                     Icon: Mail,
-                  },
-                  {
-                    label: "Verify your phone",
-                    detail: user.phoneVerified
-                      ? "Your phone number is confirmed."
-                      : "Confirm the code sent to your phone.",
-                    done: user.phoneVerified,
-                    Icon: Smartphone,
                   },
                   {
                     label: "Verify your identity",
@@ -736,7 +721,7 @@ export default function AccountApp({ screen }) {
                     </div>
                     {done ? (
                       <span className="checklist-status">Done</span>
-                    ) : index < 2 ? (
+                    ) : index === 0 ? (
                       <Link href="/verify-contacts" aria-label={label}>
                         <ArrowUpRight size={20} />
                       </Link>
@@ -746,9 +731,9 @@ export default function AccountApp({ screen }) {
                   </li>
                 ))}
               </ol>
-              {(!user.emailVerified || !user.phoneVerified) && (
+              {!user.emailVerified && (
                 <Link className="primary" href="/verify-contacts">
-                  Verify your contacts
+                  Verify your email
                   <ArrowRight size={18} />
                 </Link>
               )}

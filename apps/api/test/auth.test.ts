@@ -2,7 +2,8 @@ import { before, after, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
 import request from "supertest";
 import { authenticator } from "otplib";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import nodemailer from "nodemailer";
 import { createApp } from "../src/app";
 import { loadConfig } from "../src/config";
 import { migrate } from "../src/migrate";
@@ -56,7 +57,7 @@ async function messages() {
     )
   ).rows.map((r) => unseal<any>(config.DATA_ENCRYPTION_KEY, r.payload));
 }
-async function contactCode(purpose: "email" | "phone") {
+async function contactCode(purpose: "email") {
   const ms = await messages();
   return ms
     .find((m) => m.text.includes(`${purpose} verification code`))
@@ -92,7 +93,7 @@ test("registration persists hashes and country, sends encrypted challenges, and 
   const out = (
     await runtime.db.pool.query("SELECT payload FROM delivery_outbox")
   ).rows;
-  assert.equal(out.length, 2);
+  assert.equal(out.length, 1);
   assert.ok(!out[0].payload.includes(input.email));
   assert.match(r.headers["set-cookie"][0], /HttpOnly/);
   assert.match(r.headers["set-cookie"][0], /SameSite=Strict/);
@@ -114,18 +115,109 @@ test("server validates country, phone, terms, and password instead of trusting t
     "0",
   );
 });
-test("both contacts verify once; KYC and admin APIs remain blocked", async () => {
+test("email verifies once without phone verification; KYC and admin APIs remain blocked", async () => {
   const { cookie: c } = await registered();
-  for (const purpose of ["email", "phone"] as const) {
+  for (const purpose of ["email"] as const) {
     const code = await contactCode(purpose);
     assert.equal((await post("auth/verify", { purpose, code }, c)).status, 201);
     assert.equal((await post("auth/verify", { purpose, code }, c)).status, 400);
   }
   const me = await get("auth/me", c);
   assert.equal(me.body.user.state, "kyc_required");
+  assert.equal(me.body.user.emailVerified, true);
+  assert.equal(me.body.user.phoneVerified, false);
   assert.equal(me.body.user.financialAccess, false);
   assert.equal((await get("account/financial-eligibility", c)).status, 403);
   assert.equal((await get("admin/access", c)).status, 403);
+});
+test("phone verification endpoints are disabled and never mark a phone verified", async () => {
+  const { cookie: c } = await registered();
+  assert.equal(
+    (await post("auth/resend", { purpose: "phone" }, c)).status,
+    400,
+  );
+  assert.equal(
+    (await post("auth/verify", { purpose: "phone", code: "123456" }, c)).status,
+    400,
+  );
+  assert.equal((await get("auth/me", c)).body.user.phoneVerified, false);
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT count(*) FROM delivery_outbox WHERE channel='sms'",
+      )
+    ).rows[0].count,
+    "0",
+  );
+});
+test("email-only migration cancels legacy SMS and consumes phone codes without verifying users", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { r } = await registered();
+  await runtime.db.pool.query(
+    "INSERT INTO challenges(id,user_id,purpose,digest,expires_at) VALUES($1,$2,'phone','old-code',now()+interval '10 minutes')",
+    [randomUUID(), r.body.user.id],
+  );
+  for (const status of ["queued", "failed", "held"]) {
+    await runtime.db.pool.query(
+      "INSERT INTO delivery_outbox(id,user_id,channel,payload,status) VALUES($1,$2,'sms','legacy-payload',$3)",
+      [randomUUID(), r.body.user.id, status],
+    );
+  }
+  const migration = readFileSync(
+    join(__dirname, "../migrations/003_email_only_verification.sql"),
+    "utf8",
+  );
+  await runtime.db.pool.query(migration);
+  const sms = (
+    await runtime.db.pool.query(
+      "SELECT status,payload FROM delivery_outbox WHERE channel='sms'",
+    )
+  ).rows;
+  assert.equal(sms.length, 3);
+  assert.ok(
+    sms.every((row) => row.status === "cancelled" && row.payload === ""),
+  );
+  const codes = (
+    await runtime.db.pool.query(
+      "SELECT consumed_at FROM challenges WHERE purpose='phone'",
+    )
+  ).rows;
+  assert.ok(codes.every((row) => row.consumed_at));
+  const user = (
+    await runtime.db.pool.query(
+      "SELECT email_verified,phone_verified FROM users WHERE id=$1",
+      [r.body.user.id],
+    )
+  ).rows[0];
+  assert.deepEqual(user, { email_verified: false, phone_verified: false });
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT status FROM delivery_outbox WHERE channel='email'",
+      )
+    ).rows[0].status,
+    "queued",
+  );
+});
+test("financial eligibility requires email and KYC approval, without a phone verification gate", async () => {
+  const { cookie: c, r } = await registered();
+  // Approval is a fixture in this isolated test database, not a customer-facing bypass.
+  await runtime.db.pool.query(
+    "UPDATE users SET kyc_status='approved' WHERE id=$1",
+    [r.body.user.id],
+  );
+  assert.equal((await get("account/financial-eligibility", c)).status, 403);
+  const code = await contactCode("email");
+  assert.equal(
+    (await post("auth/verify", { purpose: "email", code }, c)).status,
+    201,
+  );
+  const me = await get("auth/me", c);
+  assert.equal(me.body.user.phoneVerified, false);
+  assert.equal(me.body.user.state, "customer");
+  assert.equal(me.body.user.financialAccess, true);
+  assert.equal((await get("account/financial-eligibility", c)).status, 200);
 });
 test("expired codes and bounded guessing cannot verify contacts", async () => {
   const { cookie: c, r } = await registered();
@@ -414,49 +506,72 @@ test("production rejects development delivery, draft terms and unapproved policy
   );
 });
 
-test("provider delivery retries failure and does not mistake delivery for verification", async () => {
-  const { createServer } = await import("node:http");
+test("production accepts configured email delivery without any SMS settings", () => {
+  const production = {
+    ...config,
+    NODE_ENV: "production",
+    APP_ORIGIN: "https://customer.example.com",
+    DELIVERY_MODE: "provider",
+    SECURITY_POLICY_APPROVED: "true",
+    TERMS_VERSION: "approved-v1",
+    TERMS_URL: "https://example.com/terms",
+    PRIVACY_URL: "https://example.com/privacy",
+    SMTP_HOST: "smtp.example.com",
+    MAIL_FROM: "accounts@example.com",
+  };
+  assert.doesNotThrow(() => loadConfig(production as any));
+  assert.throws(
+    () => loadConfig({ ...production, SMTP_HOST: undefined } as any),
+    /configured email delivery/,
+  );
+  assert.throws(
+    () =>
+      loadConfig({ ...production, SECURITY_POLICY_APPROVED: "false" } as any),
+    /Production/,
+  );
+});
+
+test("email provider delivery retries failure and does not mistake delivery for verification", async (t) => {
   const { Delivery } = await import("../src/delivery/delivery.service");
   let successful = false,
     received = 0;
-  const gateway = createServer((req, res) => {
-    received++;
-    assert.equal(req.headers.authorization, "Bearer test-gateway-token");
-    assert.ok(req.headers["idempotency-key"]);
-    req.resume();
-    res.writeHead(successful ? 200 : 503);
-    res.end("{}");
-  });
-  await new Promise<void>((resolve) => gateway.listen(0, "127.0.0.1", resolve));
-  const address = gateway.address() as { port: number };
+  t.mock.method(nodemailer, "createTransport", ((options: any) => {
+    assert.equal(options.requireTLS, true);
+    return {
+      sendMail: async (message: any) => {
+        received++;
+        assert.equal(message.to, input.email);
+        assert.equal(message.from, "accounts@example.com");
+        if (!successful) throw new Error("Temporary SMTP failure");
+        return { accepted: [message.to] };
+      },
+    };
+  }) as any);
   const delivery = new Delivery(runtime.db, {
     ...config,
     DELIVERY_MODE: "provider",
-    SMS_GATEWAY_URL: `http://127.0.0.1:${address.port}/messages`,
-    SMS_GATEWAY_TOKEN: "test-gateway-token",
+    SMTP_HOST: "smtp.example.com",
+    MAIL_FROM: "accounts@example.com",
   });
   try {
     const { r } = await registered();
-    // Isolate the SMS rail; real SMTP credentials/provider are deliberately not configured in tests.
-    await runtime.db.pool.query(
-      "UPDATE delivery_outbox SET status='held' WHERE channel='email'",
-    );
+    // SMTP is stubbed locally; no real messages or provider credentials are used.
     await delivery.dispatch();
     let out = (
       await runtime.db.pool.query(
-        "SELECT * FROM delivery_outbox WHERE channel='sms'",
+        "SELECT * FROM delivery_outbox WHERE channel='email'",
       )
     ).rows[0];
     assert.equal(out.status, "queued");
     assert.equal(out.attempts, 1);
     successful = true;
     await runtime.db.pool.query(
-      "UPDATE delivery_outbox SET next_attempt_at=now() WHERE channel='sms'",
+      "UPDATE delivery_outbox SET next_attempt_at=now() WHERE channel='email'",
     );
     await delivery.dispatch();
     out = (
       await runtime.db.pool.query(
-        "SELECT * FROM delivery_outbox WHERE channel='sms'",
+        "SELECT * FROM delivery_outbox WHERE channel='email'",
       )
     ).rows[0];
     assert.equal(out.status, "delivered");
@@ -465,14 +580,14 @@ test("provider delivery retries failure and does not mistake delivery for verifi
     assert.equal(
       (
         await runtime.db.pool.query(
-          "SELECT phone_verified FROM users WHERE id=$1",
+          "SELECT email_verified FROM users WHERE id=$1",
           [r.body.user.id],
         )
-      ).rows[0].phone_verified,
+      ).rows[0].email_verified,
       false,
     );
   } finally {
-    await new Promise<void>((resolve) => gateway.close(() => resolve()));
+    t.mock.restoreAll();
   }
 });
 
@@ -485,7 +600,7 @@ test("expired verification messages are cleared without being delivered", async 
   const rows = (
     await runtime.db.pool.query("SELECT status,payload FROM delivery_outbox")
   ).rows;
-  assert.equal(rows.length, 2);
+  assert.equal(rows.length, 1);
   for (const row of rows) {
     assert.equal(row.status, "expired");
     assert.equal(row.payload, "");

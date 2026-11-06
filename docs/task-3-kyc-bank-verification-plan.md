@@ -8,7 +8,7 @@ This plan follows PRD v1.1 Sections 4, 7.4–7.5, 13.3, 17.4 and 21.1, and decis
 
 Customers can complete identity verification, see verified outcomes and correction requests, and add bank destinations whose ownership is verified. The backend enforces eligibility and ownership on every relevant request.
 
-Task 2 already supplies registration, shared customer/admin login, email and phone verification, MFA, session management, PostgreSQL migrations, audit events, encrypted delivery records and a basic financial-eligibility check. The saved baseline is `d613f62`, including working marketing-to-customer account links and the API runtime dependency fix. Task 3 extends these services and the current Zetmond logo, purple styling, light/dark themes and responsive account layout. Live email/SMS delivery and production configuration still have the prerequisites documented under Task 2.
+Task 2 already supplies registration, shared customer/admin login, email-only verification, MFA, session management, PostgreSQL migrations, audit events, encrypted delivery records and a basic financial-eligibility check. The saved baseline is `d613f62`, including working marketing-to-customer account links and the API runtime dependency fix. Task 3 extends these services and the current Zetmond logo, purple styling, light/dark themes and responsive account layout. Live email delivery and production configuration still have the prerequisites documented under Task 2.
 
 When implementation begins, use `feat/task-3-kyc-bank-verification` based on that Task 2 work (or the merge commit containing it). The current document is a planning draft, not an implementation or provider approval.
 
@@ -66,7 +66,7 @@ Use a step panel with guidance on desktop and one clear step per screen on mobil
 
 ### 3.6 — Eligibility enforcement
 
-Create reusable backend eligibility checks using current account, contact, KYC and restriction records. Base customer eligibility requires verified email/phone, approved KYC and no disqualifying restriction. Verified bank ownership is an additional requirement for relevant payout/advertiser operations; it is not automatically a prerequisite for every wallet action. MFA requirements remain specific to sensitive actions.
+Create reusable backend eligibility checks using current account, contact, KYC and restriction records. Base customer eligibility requires verified email, approved KYC and no disqualifying restriction. Verified bank ownership is an additional requirement for relevant payout/advertiser operations; it is not automatically a prerequisite for every wallet action. MFA requirements remain specific to sensitive actions.
 
 Refresh displayed status in open sessions and recheck permission when an operation executes. A later restriction or KYC change must preserve existing records and financial obligations. Task 3 establishes these checks; financial capabilities become available only through their later implementation tasks and release gates.
 

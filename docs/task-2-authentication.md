@@ -41,7 +41,7 @@ The customer layout imports the existing marketing theme provider and before-pai
 ## Delivered flows
 
 - Customer registration in NG/NGN, GH/GHS, ZA/ZAR and KE/KES, with matching international phone validation and versioned policy acceptance.
-- Email and phone challenges, expiry, attempt limits, resend cooldown and persisted delivery state.
+- Email-only challenges, expiry, attempt limits, resend cooldown and persisted delivery state. Phone numbers remain unverified contact data; SMS and phone verification are not required.
 - Argon2id password hashes, opaque hashed sessions, secure HTTP-only cookies, logout and owner-scoped session revocation.
 - Authenticator-app enrollment and challenge, one-time recovery codes, TOTP replay protection, session-token rotation and mandatory administrator MFA.
 - Generic password-recovery responses, single-use reset links, revocation of existing sessions and queued security notices.
@@ -68,9 +68,11 @@ pnpm dev:customer
 
 API: port 4100. Customer: port 4200. Existing marketing: `pnpm dev`, port 4173. No shared root Next.js route or marketing source migration is required. For build/serve use `pnpm build:auth`, `pnpm --filter @zetmond/api start`, and `pnpm --filter @zetmond/customer start` (supply environment variables or Node's `--env-file` for the compiled API).
 
+On Render, the production API binds to `0.0.0.0` using the supplied `PORT`; local/test runs remain on loopback. Run the database migrations before serving an upgraded release. The customer Vercel project's `API_INTERNAL_ORIGIN` must point to the API's actual Render HTTPS origin; rebuild/redeploy the customer app after changing it.
+
 Marketing account links now open the customer app: “Get started”/“Create an account” go to `/register`; “Log in” goes to `/login`. Links default to the hosted app at `https://zetmond.vercel.app`. For the complete local entry flow, keep all three local processes running and set `NEXT_PUBLIC_CUSTOMER_APP_ORIGIN=http://127.0.0.1:4200` in `marketing/.env.local` (see its `.env.example`). An explicit origin overrides the hosted default, so remove or update any old localhost setting in the marketing project's Vercel environment before deployment. This public value is fixed at build time; rebuild marketing after changing it. The API's `APP_ORIGIN` must match the customer app's browser-visible origin, including when using forwarded VS Code ports.
 
-Development delivery keeps encrypted messages in PostgreSQL rather than pretending to deliver email/SMS. An owner at the terminal can inspect their test inbox:
+Development delivery keeps encrypted messages in PostgreSQL rather than pretending to deliver email. An owner at the terminal can inspect their test inbox:
 
 ```sh
 pnpm --filter @zetmond/api delivery:local test-user@example.com
@@ -90,7 +92,7 @@ The command creates a new admin only; it never promotes an existing customer, re
 
 ## Provider delivery
 
-Set `DELIVERY_MODE=provider` with the approved SMTP configuration and SMS gateway. SMTP requires TLS. The gateway adapter sends HTTPS JSON `{to,text,reference}` with a bearer token and stable `Idempotency-Key`; integrate a selected provider behind that contract. Provider selection and contract validation remain outstanding. The outbox commits with the account/challenge transaction, retries failures with backoff and preserves failed delivery status for investigation. Expired verification payloads are cleared and never delivered. Successful message payloads are cleared. Delivery success is not contact verification.
+Set `DELIVERY_MODE=provider` with working approved SMTP configuration. SMTP requires TLS. Gmail may be used with `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, the Gmail address as `SMTP_USER` and `MAIL_FROM`, and a Google App Password as `SMTP_PASSWORD`. Do not use the normal Gmail password. SMS is not used; `SMS_GATEWAY_URL` and `SMS_GATEWAY_TOKEN` are no longer configuration requirements. Provider delivery must be tested before launch. The outbox commits with the account/challenge transaction, retries failures with backoff and preserves failed delivery status for investigation. Expired verification payloads are cleared and never delivered. Successful message payloads are cleared. Delivery success is not email verification. Registration sends only an email challenge; verification/resend accepts only `purpose=email`. Phone numbers are not automatically marked verified and do not gate access; verified email, approved KYC and the other existing authorization rules still apply. Run migration `003_email_only_verification.sql` through `pnpm db:migrate` before deploying over an existing database; it consumes outstanding phone codes and cancels/clears pending legacy SMS without changing user verification flags.
 
 Production refuses to start with development delivery, draft terms, non-HTTPS app origin, missing provider settings, or `SECURITY_POLICY_APPROVED=false`, or missing approved HTTPS terms/privacy URLs. Never set that flag merely to silence validation. The policy values, final legal pages, provider behaviour, ingress/rate policy and deployed session isolation must be reviewed first.
 
@@ -131,7 +133,7 @@ Backend coverage includes direct role injection, invalid eligibility inputs, enc
 
 ## Remaining production prerequisites
 
-- Approved email/SMS providers with real delivery and failure/retry evidence in all four countries.
+- Working approved email delivery with real delivery and failure/retry evidence. SMS is excluded by the owner’s email-only decision.
 - Approved country-specific legal disclosures and retention policies; current policy notice is development-only.
 - Approved exact security timing/rate/recovery policy and incident/support procedures.
 - Task 3 KYC/bank integration and production age/document verification; registration attestation is not KYC evidence.

@@ -130,7 +130,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const d = this.input(
-      z.object({ purpose: z.enum(["email", "phone"]) }).strict(),
+      z.object({ purpose: z.literal("email") }).strict(),
       body,
     );
     return this.respond(this.auth.resend(this.value(req), d.purpose), res);

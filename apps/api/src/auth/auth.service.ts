@@ -81,7 +81,7 @@ export class AuthService {
         : "mfa_setup_required"
       : u.role === "admin"
         ? "admin"
-        : !u.email_verified || !u.phone_verified
+        : !u.email_verified
           ? "verify_contacts"
           : u.kyc_status !== "approved"
             ? "kyc_required"
@@ -102,7 +102,6 @@ export class AuthService {
         u.role === "customer" &&
         u.mfa_verified &&
         u.email_verified &&
-        u.phone_verified &&
         u.kyc_status === "approved" &&
         !u.restricted,
     };
@@ -125,7 +124,7 @@ export class AuthService {
       maxAge: minutes * 60000,
     };
   }
-  async challenge(c: PoolClient, u: any, purpose: "email" | "phone" | "reset") {
+  async challenge(c: PoolClient, u: any, purpose: "email" | "reset") {
     const recent = await c.query(
       "SELECT 1 FROM challenges WHERE user_id=$1 AND purpose=$2 AND created_at>now()-make_interval(secs=>$3)",
       [u.id, purpose, this.config.RESEND_SECONDS],
@@ -150,13 +149,13 @@ export class AuthService {
     const text =
       purpose === "reset"
         ? `Reset your Zetmond password: ${this.config.APP_ORIGIN}/reset-password#token=${code}\nThis link expires in ${this.config.CHALLENGE_MINUTES} minutes. If you did not request this, ignore it.`
-        : `Your Zetmond ${purpose === "email" ? "email" : "phone"} verification code is ${code}. It expires in ${this.config.CHALLENGE_MINUTES} minutes.`;
+        : `Your Zetmond email verification code is ${code}. It expires in ${this.config.CHALLENGE_MINUTES} minutes.`;
     await this.delivery.enqueue(
       c,
       u.id,
-      purpose === "phone" ? "sms" : "email",
+      "email",
       {
-        to: purpose === "phone" ? u.phone : u.email,
+        to: u.email,
         subject: "Zetmond account verification",
         text,
       },
@@ -193,7 +192,6 @@ export class AuthService {
         };
       const u = r.rows[0];
       await this.challenge(c, u, "email");
-      await this.challenge(c, u, "phone");
       await this.audit(c, u.id, "registered");
       return this.session(c, u, agent);
     });
@@ -234,7 +232,7 @@ export class AuthService {
       return u ? { user: this.view(u) } : rejected();
     });
   }
-  async resend(value: string | undefined, purpose: "email" | "phone") {
+  async resend(value: string | undefined, purpose: "email") {
     return this.db.tx(async (c) => {
       const u = await this.current(c, value);
       if (!u) return rejected();
@@ -246,11 +244,7 @@ export class AuthService {
         : rejected("Please wait before requesting another code.", 429);
     });
   }
-  async verify(
-    value: string | undefined,
-    purpose: "email" | "phone",
-    code: string,
-  ) {
+  async verify(value: string | undefined, purpose: "email", code: string) {
     return this.db.tx(async (c) => {
       const u = await this.current(c, value);
       if (!u) return rejected();
@@ -274,11 +268,7 @@ export class AuthService {
       await c.query("UPDATE challenges SET consumed_at=now() WHERE id=$1", [
         row.id,
       ]);
-      // Column names are selected solely from the validated server enum.
-      await c.query(
-        `UPDATE users SET ${purpose === "email" ? "email_verified" : "phone_verified"}=true WHERE id=$1`,
-        [u.id],
-      );
+      await c.query("UPDATE users SET email_verified=true WHERE id=$1", [u.id]);
       u[`${purpose}_verified`] = true;
       await this.audit(c, u.id, `${purpose}_verified`);
       return { user: this.view(u) };
