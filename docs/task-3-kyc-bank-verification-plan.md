@@ -1,18 +1,28 @@
 # Task 3 — KYC and bank verification plan
 
-Status: proposed implementation plan. Task 3 application work has not started.
+Status: implementation plan updated 6 November 2026. Task 3 application work has not started; provider selection is the first implementation milestone.
 
-This plan follows PRD v1.1 Sections 4, 7.4–7.5, 13.3, 17.4 and 21.1, and decisions O01, O19, O20, O22 and O25. Provider selection and policies marked TBD in that PRD remain undecided.
+This plan follows PRD v1.1 Sections 4, 7.4–7.5, 13.3, 16.7, 17.4 and 21.1, and decisions O01, O19, O20, O22, O25 and O26. Provider selection and policies marked TBD in that PRD remain undecided.
 
 ## Goal and existing foundation
 
 Customers can complete identity verification, see verified outcomes and correction requests, and add bank destinations whose ownership is verified. The backend enforces eligibility and ownership on every relevant request.
 
-Task 2 already supplies registration, shared customer/admin login, email-only verification, MFA, session management, PostgreSQL migrations, audit events, encrypted delivery records and a basic financial-eligibility check. The saved baseline is `d613f62`, including working marketing-to-customer account links and the API runtime dependency fix. Task 3 extends these services and the current Zetmond logo, purple styling, light/dark themes and responsive account layout. Live email delivery and production configuration still have the prerequisites documented under Task 2.
+Task 2 supplies registration, shared customer/admin login, email-only verification, MFA, session management, PostgreSQL migrations, audit events, encrypted delivery records and financial-eligibility checks. Start from `main` at `e37e15a` (PR #5), which includes staging implementation `319b367`. That baseline passed 24 backend tests and 9 customer browser tests. The owner confirmed Render staging health and reported receiving the test email. Task 3 extends the current Zetmond logo, purple styling, light/dark themes and responsive account layout.
 
-When implementation begins, use `feat/task-3-kyc-bank-verification` based on that Task 2 work (or the merge commit containing it). The current document is a planning draft, not an implementation or provider approval.
+Current hosts are `https://zetmond.vercel.app` for customers and `https://zetmond-wallet.onrender.com` for APIs. Hosting details and remaining live checks are documented in [Render staging setup](render-staging.md). Operator details, final notices and production policy approvals remain pending.
 
-Launch markets remain Nigeria/NGN, Ghana/GHS, South Africa/ZAR and Kenya/KES. Customers must be at least 18 and complete government-ID plus selfie/liveness verification. Both contact channels must be verified before financial access.
+When implementation begins, use `feat/task-3-kyc-bank-verification` based on the latest `main` containing that baseline and this plan. The current document records planned work, not implementation or provider approval.
+
+Launch markets remain Nigeria/NGN, Ghana/GHS, South Africa/ZAR and Kenya/KES. Customers must be at least 18 and complete government-ID plus selfie/liveness verification. Email verification is required; phone numbers remain contact data and do not require SMS verification.
+
+## Staging boundaries
+
+- Keep `NODE_ENV=production` and `DEPLOYMENT_STAGE=staging` on Render, preserving HTTPS, secure cookies, email verification, MFA and authorization.
+- Use provider sandboxes and test identities/bank details. Live identity collection requires the applicable provider agreement, privacy disclosures and evidence-handling decisions.
+- Keep the backend staging financial-access denial even when a sandbox KYC case is approved. Identity and bank-management APIs need their own permission checks so that financial restrictions do not block testing verification itself.
+- Do not change the owner's private `.env`. Document new variable names in examples/setup instructions and configure actual provider secrets through protected service settings.
+- The owner intends the full product for customer launch. Task 3 does not enable wallet funding, withdrawals, P2P settlement or Vault functionality. Vault remains Task 9 and admin remains Task 10.
 
 ## Delivery sequence
 
@@ -21,6 +31,17 @@ Launch markets remain Nigeria/NGN, Ghana/GHS, South Africa/ZAR and Kenya/KES. Cu
 Research KYC and bank-verification providers against a country-by-country capability matrix. Confirm supported documents, liveness, age verification, bank identifiers, account-name/ownership evidence, authenticated results, status lookup, retries, pricing, data handling and eligibility to serve Zetmond's disclosed business.
 
 Prefer provider-hosted identity capture to minimize locally held documents. A bank lookup or a typed account-holder name alone must not establish ownership.
+
+Record the decision matrix before committing to an integration:
+
+| Market | ID documents and selfie/liveness | Bank identifiers and ownership evidence | Provider sandbox, authenticated results and business eligibility |
+| --- | --- | --- | --- |
+| Nigeria / NGN | TBD; confirm supported government IDs and age evidence | TBD; confirm bank lookup and verified ownership capability | TBD |
+| Ghana / GHS | TBD; confirm supported government IDs and age evidence | TBD; use the provider's Ghana-specific bank schema | TBD |
+| South Africa / ZAR | TBD; confirm supported government IDs and age evidence | TBD; use the provider's South Africa-specific bank schema | TBD |
+| Kenya / KES | TBD; confirm supported government IDs and age evidence | TBD; use the provider's Kenya-specific bank schema | TBD |
+
+Use current official documentation, account capabilities and sandbox evidence to fill this matrix. No provider, price or country coverage is approved by this plan. KYC and bank verification can use different providers. Bank verification is separate from choosing a fiat collection/payout provider; a standard Monnify contract must not be assumed eligible for Zetmond's crypto/P2P model.
 
 Before the affected integration is activated, resolve:
 
@@ -36,7 +57,7 @@ Provider adapters, schema and screens can progress before credentials are availa
 
 Add additive PostgreSQL migrations for identity profiles, KYC cases/attempts and decision history, bank destinations and verification attempts, and a provider-event inbox. Keep sensitive identity/bank fields encrypted and retain minimal provider references where possible.
 
-Extend the current four-value KYC status model to represent the full workflow. Keep provider availability and account restrictions distinct from the case's verification outcome. Preserve prior decisions and link resubmissions to their original case.
+Represent the full workflow on KYC cases and attempts. Keep the existing `users.kyc_status` as a compatible eligibility projection, updated atomically with verified decisions. Derive detailed customer labels/actions from case state so a rejection or correction is not misleadingly presented as ordinary review. Keep provider availability and account restrictions distinct from the case outcome; ordinary rejection must not silently become an account restriction. Preserve prior decisions and link resubmissions to their original case.
 
 Use explicit state transitions, operation identifiers, ownership constraints and audit records. Bank records must support immutable destination versions so later trade snapshots cannot be redirected by a profile edit.
 
@@ -48,11 +69,15 @@ Support not-started, incomplete, submitting, under-review, approved, correction-
 
 Provider webhooks need their own source authentication and signature/raw-body handling; they cannot use the current browser-only Origin/custom-header check. Persist authenticated events durably, deduplicate deliveries and reconcile canonical provider status before applying conflicting or out-of-order results. Add recoverable background processing using the approved Redis/BullMQ stack with PostgreSQL as the durable source of work and results.
 
+Scope webhook routing to configured providers and preserve raw bytes before JSON parsing where signatures require them. Keep the existing browser Origin/custom-header checks on all ordinary mutation routes. Bind results to provider mode, customer, case and current attempt; stale results must not approve a newer rejected/restricted case. Persist external-operation intent and stable references before submission, and recover an unknown provider outcome before retrying a chargeable operation.
+
 ### 3.4 — Bank destination verification
 
 Implement country-specific bank lists/identifiers and an authenticated add/verify/list flow. Compare provider-confirmed ownership against the verified identity using the selected matching policy. Show pending, verified, mismatch, unavailable and inactive states with masked account details.
 
 Extend Task 2's operation-bound MFA grants for sensitive destination changes. Consume authorization for the exact change in the same database transaction. Protect every bank record by customer ownership, and preserve verification history when a destination is retired under the agreed policy.
+
+Add explicit bank-operation purposes to the existing step-up allowlist; bind authorization to the validated bank payload/destination version. Require authenticator enrollment when needed. Store the pending operation and consume its grant atomically; provider retries reuse that operation rather than replaying authorization. Do not edit verified account numbers in place. Retirement stays unavailable until its policy is resolved and must never delete destination evidence or break an active obligation.
 
 ### 3.5 — Customer screens
 
@@ -70,6 +95,8 @@ Create reusable backend eligibility checks using current account, contact, KYC a
 
 Refresh displayed status in open sessions and recheck permission when an operation executes. A later restriction or KYC change must preserve existing records and financial obligations. Task 3 establishes these checks; financial capabilities become available only through their later implementation tasks and release gates.
 
+Separate checks for identity submission, bank management and financial actions. Starting KYC requires an eligible authenticated customer with verified email, not already-approved KYC. Bank verification requires the approved identity and applicable MFA. The existing staging financial guard remains authoritative: an approved sandbox case must still report `financialAccess=false` and financial APIs must reject access.
+
 ### 3.7 — Verification and handoff
 
 - PostgreSQL integration tests for ownership, valid transitions, encrypted records and restart recovery.
@@ -78,6 +105,7 @@ Refresh displayed status in open sessions and recheck permission when an operati
 - Direct API tests showing that unapproved or restricted users cannot bypass eligibility, and one customer cannot access another's bank or identity case.
 - Browser journeys for desktop/mobile, light/dark themes, return from hosted capture, reload/resume, accessible errors and cross-session status refresh.
 - Rerun Task 2 authentication tests and builds. Record provider sandbox evidence separately from automated fixtures.
+- Prove staging still rejects financial access after sandbox approval, and that missing/invalid provider configuration never approves a case or bank. Keep schema/API fixtures confined to isolated test databases; no customer-facing approval switches.
 
 Operational case records and audit history are prepared now for the later admin workspace. Vault remains Task 9, second to last; the admin portal remains Task 10, last.
 
@@ -85,12 +113,13 @@ Operational case records and audit history are prepared now for the later admin 
 
 ```text
 apps/api/
-  migrations/003_identity_and_banks.sql
+  migrations/004_identity_and_banks.sql
   src/kyc/                 Case lifecycle, customer APIs and verified decisions
   src/banks/               Bank destinations and ownership checks
   src/eligibility/         Shared action-specific permission checks
   src/providers/           Selected KYC/bank integrations and webhook contracts
   src/jobs/                Durable event processing and reconciliation
+  src/worker.ts            Proposed worker entry point; not an existing command
   test/                    Database and provider-contract tests
 apps/customer/
   app/identity/page.jsx
@@ -107,7 +136,7 @@ File names are proposed and may be refined after provider selection. Keep identi
 
 ## Proposed customer journey and API surface
 
-The customer completes contact verification, opens **Verify identity**, reviews the required evidence, completes provider-hosted ID/selfie capture, and returns to a persisted status page. A correction request opens only the permitted resubmission steps. Once identity is approved, **Bank accounts** supports adding a destination and checking its verified owner against that identity.
+The customer completes email verification, opens **Verify identity**, reviews the required evidence, completes provider-hosted ID/selfie capture, and returns to a persisted status page. A correction request opens only the permitted resubmission steps. Once identity is approved, **Bank accounts** supports adding a destination and checking its verified owner against that identity. Sandbox approval is labelled appropriately and never opens staging financial access.
 
 Proposed routes, subject to the selected provider contracts:
 
@@ -126,6 +155,8 @@ Proposed routes, subject to the selected provider contracts:
 
 Bank retirement/change endpoints depend on the agreed policy. ID document numbers, full bank details and provider capture secrets must not appear in these route paths. Any automated fixture or sandbox mode remains isolated from production verification.
 
+The dynamic webhook notation is a planning shorthand: only explicitly configured, independently authenticated provider routes may be enabled.
+
 ## Reviewable milestones
 
 1. **Provider decision:** country capability matrix, selected integration contracts and outstanding policy decisions recorded.
@@ -133,6 +164,27 @@ Bank retirement/change endpoints depend on the agreed policy. ID document number
 3. **Identity journey:** real provider sandbox capture, status, approval and correction/resubmission demonstrated on desktop and mobile.
 4. **Bank journey:** provider-backed ownership verification, mismatch handling, protected changes and masked account presentation demonstrated.
 5. **Task 3 handoff:** direct API enforcement, repeated/out-of-order event handling, restart recovery and Task 2 regression checks pass, with remaining launch prerequisites listed.
+
+## Render/Vercel rollout
+
+1. Select provider sandbox accounts, callback URLs, country capabilities and data-handling rules. Record remaining commercial/production decisions without inventing defaults.
+2. Select/configure the Redis service and Render background-worker arrangement required by BullMQ. Keep PostgreSQL as the durable record of work; worker restarts and Redis interruptions must recover without losing decisions or duplicating provider operations.
+3. Apply the next additive migration (`004`, after the existing email-only migration `003`) and deploy the API/worker with supported sandbox adapters enabled. Preserve existing data and encryption keys.
+4. Redeploy the Vercel customer app with its existing Render `API_INTERNAL_ORIGIN`; verify hosted return URLs and provider webhook routing. Keys and provider session secrets stay server-side.
+5. Exercise the identity and bank journeys using supported sandbox fixtures and real provider status/signature contracts. Document observed results per market; unsupported capabilities remain unavailable and cannot be counted complete.
+6. Keep production activation separate: final operator details, policies, provider eligibility and full-product release gates still apply. This rollout does not change `DEPLOYMENT_STAGE` to production or approve the pending policies.
+
+## Decisions still needed
+
+| Decision | When it blocks work |
+| --- | --- |
+| KYC provider, country/document coverage and sandbox access | Provider-specific capture, signature handling and verified outcomes |
+| Bank-verification provider and ownership/name-match policy | Account schema, trusted match results and exception handling |
+| Redis/worker service arrangement | Hosted durable background processing and restart evidence |
+| Retention, deletion and consent/disclosure rules | Collection/storage of the affected identity evidence and production activation |
+| Legal operator/contact details and final launch policies | Real-customer launch; may remain pending during isolated sandbox development |
+
+No budget, price or delivery date is assumed. Provider-neutral schema, authorization and unavailable-state screens can progress while these choices are resolved, but they do not constitute a working verification integration.
 
 ## Previewing the customer app in VS Code
 
