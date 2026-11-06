@@ -99,6 +99,7 @@ export class AuthService {
       mfaEnabled: !!u.mfa_secret,
       state,
       financialAccess:
+        this.config.DEPLOYMENT_STAGE !== "staging" &&
         u.role === "customer" &&
         u.mfa_verified &&
         u.email_verified &&
@@ -566,6 +567,11 @@ export class AuthService {
     return this.db.tx(async (c) => {
       const u = await this.current(c, value);
       if (!u) return rejected();
+      if (this.config.DEPLOYMENT_STAGE === "staging")
+        return rejected(
+          "Wallet and trading access are disabled in the test environment.",
+          403,
+        );
       if (!this.view(u).financialAccess)
         return rejected(
           "Verified contacts and approved KYC are required.",

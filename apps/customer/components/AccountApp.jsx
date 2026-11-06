@@ -311,6 +311,12 @@ export default function AccountApp({ screen }) {
         <h1>{title}</h1>
         <p className="intro">{subtitle}</p>
       </header>
+      {policy?.deploymentStage === "staging" && (
+        <aside className="notice" role="note" aria-label="Staging environment">
+          Test environment. Use test accounts only. Wallet transfers and trading
+          are unavailable.
+        </aside>
+      )}
       {loading && <p role="status">Loading your account…</p>}
       {error && (
         <div
@@ -431,7 +437,7 @@ export default function AccountApp({ screen }) {
               .
             </span>
           </label>
-          {policy?.development && (
+          {policy?.development && policy?.deploymentStage !== "staging" && (
             <p className="notice">
               Test environment. Please use test details. Financial services are
               not available yet.

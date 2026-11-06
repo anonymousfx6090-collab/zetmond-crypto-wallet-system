@@ -13,6 +13,7 @@ import {
 import { Request, Response } from "express";
 import { z } from "zod";
 import { AuthService } from "./auth.service";
+import { deploymentStage } from "../config";
 import {
   registerSchema,
   loginSchema,
@@ -65,7 +66,7 @@ export class AuthController {
     return body;
   }
   @Get("health") health() {
-    return { status: "ok" };
+    return { status: "ok", deploymentStage: deploymentStage(this.auth.config) };
   }
   @Get("auth/policy") policy() {
     return {
@@ -79,6 +80,7 @@ export class AuthController {
       termsUrl: this.auth.config.TERMS_URL,
       privacyUrl: this.auth.config.PRIVACY_URL,
       development: this.auth.config.NODE_ENV !== "production",
+      deploymentStage: deploymentStage(this.auth.config),
     };
   }
   @Post("auth/register") register(
@@ -220,6 +222,9 @@ export class AuthController {
     const body = await this.respond(this.auth.revoke(this.value(req)), res);
     res.clearCookie(cookieName(this.auth.config.NODE_ENV === "production"), {
       path: "/",
+      secure: this.auth.config.NODE_ENV === "production",
+      httpOnly: true,
+      sameSite: "strict",
     });
     return body;
   }

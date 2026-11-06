@@ -555,6 +555,122 @@ test("production configuration reports all incomplete settings by name", () => {
   );
 });
 
+const stagingSettings = () => ({
+  ...config,
+  NODE_ENV: "production",
+  DEPLOYMENT_STAGE: "staging",
+  APP_ORIGIN: "https://staging.example.com",
+  DELIVERY_MODE: "provider",
+  SMTP_HOST: "smtp.example.com",
+  MAIL_FROM: "accounts@example.com",
+});
+
+test("explicit staging accepts pending policies without marking them approved", () => {
+  const staged = loadConfig(stagingSettings() as any);
+  assert.equal(staged.NODE_ENV, "production");
+  assert.equal(staged.DEPLOYMENT_STAGE, "staging");
+  assert.equal(staged.SECURITY_POLICY_APPROVED, "false");
+  assert.equal(staged.TERMS_VERSION, "development-draft");
+  assert.equal(staged.TERMS_URL, undefined);
+  assert.equal(staged.PRIVACY_URL, undefined);
+  assert.throws(
+    () =>
+      loadConfig({ ...stagingSettings(), DEPLOYMENT_STAGE: undefined } as any),
+    /SECURITY_POLICY_APPROVED/,
+  );
+});
+
+test("staging retains hosted security and delivery configuration checks", () => {
+  for (const [field, value] of [
+    ["NODE_ENV", "development"],
+    ["APP_ORIGIN", "http://staging.example.com"],
+    ["DELIVERY_MODE", "development"],
+    ["SMTP_HOST", undefined],
+    ["MAIL_FROM", undefined],
+    ["DEPLOYMENT_STAGE", "stagng"],
+  ] as const) {
+    assert.throws(
+      () => loadConfig({ ...stagingSettings(), [field]: value } as any),
+      new RegExp(field),
+    );
+  }
+});
+
+test("hosted staging uses secure sessions and denies financial access even after email and KYC approval", async () => {
+  const stagedConfig = loadConfig(stagingSettings() as any);
+  const staged = await createApp(stagedConfig);
+  const stagedServer = staged.app.getHttpServer();
+  const stagedPost = (path: string, body: unknown, session?: string) => {
+    const req = request(stagedServer)
+      .post(`/api/${path}`)
+      .set("Origin", stagedConfig.APP_ORIGIN)
+      .set("X-Zetmond-Request", "1")
+      .send(body);
+    if (session) req.set("Cookie", session);
+    return req;
+  };
+  try {
+    const health = await request(stagedServer).get("/api/health");
+    assert.deepEqual(health.body, { status: "ok", deploymentStage: "staging" });
+    const policy = await request(stagedServer).get("/api/auth/policy");
+    assert.equal(policy.body.deploymentStage, "staging");
+    assert.equal(policy.body.development, false);
+    const registered = await stagedPost("auth/register", input);
+    assert.equal(registered.status, 201);
+    assert.match(
+      registered.headers["set-cookie"][0],
+      /^__Host-zetmond_session=/,
+    );
+    assert.match(registered.headers["set-cookie"][0], /; Secure/);
+    assert.match(registered.headers["set-cookie"][0], /HttpOnly/);
+    const session = cookie(registered);
+    const verified = await stagedPost(
+      "auth/verify",
+      { purpose: "email", code: await contactCode("email") },
+      session,
+    );
+    assert.equal(verified.status, 201);
+    // Fixture approval is confined to the isolated test database.
+    await staged.db.pool.query(
+      "UPDATE users SET kyc_status='approved' WHERE id=$1",
+      [registered.body.user.id],
+    );
+    const me = await request(stagedServer)
+      .get("/api/auth/me")
+      .set("Cookie", session);
+    assert.equal(me.body.user.emailVerified, true);
+    assert.equal(me.body.user.kycStatus, "approved");
+    assert.equal(me.body.user.financialAccess, false);
+    const financial = await request(stagedServer)
+      .get("/api/account/financial-eligibility")
+      .set("Cookie", session);
+    assert.equal(financial.status, 403);
+    assert.match(financial.body.message, /test environment/);
+    assert.equal(
+      (
+        await request(stagedServer)
+          .get("/api/admin/access")
+          .set("Cookie", session)
+      ).status,
+      403,
+    );
+    const loggedOut = await stagedPost("auth/logout", {}, session);
+    assert.equal(loggedOut.status, 201);
+    assert.match(
+      loggedOut.headers["set-cookie"][0],
+      /^__Host-zetmond_session=/,
+    );
+    assert.match(loggedOut.headers["set-cookie"][0], /; Secure/);
+    assert.equal(
+      (await request(stagedServer).get("/api/auth/me").set("Cookie", session))
+        .status,
+      401,
+    );
+  } finally {
+    await staged.close();
+  }
+});
+
 test("invalid configuration reports field names without exposing supplied secrets", () => {
   const secret = "private-value-do-not-log";
   assert.throws(

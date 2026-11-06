@@ -10,7 +10,7 @@
 | Delivery intent | A production service for real users, real identity verification and real funds |
 | Document status | Owner-approved decisions recorded in Section 23; remaining details and launch blockers remain explicit |
 | Primary source | `Zetmond_Product_Requirements_Document_v1.0.md`, dated 19 October 2026 |
-| Authoritative update | Owner decision review and shared login: 3 November 2026; negotiated-price chat, matching submissions, funding activation, Render API hosting and email-only verification: 5 November 2026 · Africa/Lagos |
+| Authoritative update | Owner decision review/shared login: 3 November 2026; negotiated-price chat, Render API hosting and email-only verification: 5 November 2026; hosted staging while preparing the full launch: 6 November 2026 · Africa/Lagos |
 | Platforms | Responsive browser application: desktop, tablet, phone and intermediate widths |
 | Related surfaces | Existing public marketing site; customer web application; separate admin portal |
 | Schedule | No launch date or delivery estimate has been approved |
@@ -35,6 +35,8 @@ This revision preserves the uploaded v1.0 production requirements and records th
 **API hosting — owner-selected 5 November 2026:** use Render for the NestJS APIs; retain the marketing and customer frontends on Vercel. See Section 16.7 and O25/O26 for connectivity and deployment requirements. Selecting hosting does not claim that an API deployment or its production dependencies are configured.
 
 **Email-only verification — owner-approved 5 November 2026:** SMS is excluded. Customers and advertisers verify email; a phone number is contact information and is not treated as verified or required to pass phone verification for access. This supersedes earlier verified-phone requirements, SMS delivery dependencies and the old O22/O24 wording. Existing KYC, verified bank ownership and authenticator-app MFA requirements still apply.
+
+**Hosted staging — owner-approved 6 November 2026:** deploy a clearly identified testing environment on Render/Vercel while completing the product and launch policies. The owner intends all features for the real-customer launch and deferred legal operator/contact details; this is not approval of a partial customer launch. Keep production runtime security, use test accounts/data, and disable financial access on the backend. Staging may leave legal/security approval settings pending; the default production deployment still requires them. See Section 16.7 and `docs/render-staging.md`.
 
 **Current delivery context:** budget and launch volume are TBD, no launch date is set, and development is planned with the product owner and AI assistant. Operational responders, independent assessments and any specialist responsibilities must still be assigned before launch; they are not supplied by this development arrangement.
 
@@ -1148,6 +1150,7 @@ The browser may cache display data and permitted form drafts, but cache is not a
 
 ### 16.7 Render API hosting and Vercel connectivity — Owner-selected 5 November 2026
 
+- Staging update, 6 November 2026: explicitly set `DEPLOYMENT_STAGE=staging` with `NODE_ENV=production` for hosted testing. Keep HTTPS, secure cookies, configured email delivery, authentication/MFA and authorization. Identify staging in API health/policy metadata and the customer interface. Deny financial access on the backend regardless of test KYC approval. Pending terms/privacy/security approvals may remain pending in this mode; do not set approval flags as a shortcut. The stage defaults to production and all existing production release gates apply there.
 - Deploy the NestJS APIs from `apps/api` to Render, using a reproducible monorepo install/build/start configuration. The API must bind to `0.0.0.0` and Render's assigned `PORT`, rather than a loopback-only address. Provide the existing `/api/health` endpoint and deployment/readiness checks appropriate to database and worker availability.
 - Retain marketing at `https://zetmond-crypto-wallet-system.vercel.app` and the customer app at `https://zetmond.vercel.app` as the owner-supplied frontend addresses. Custom domains and the eventual admin hostname remain TBD. The Render API service URL is not yet supplied; record the actual HTTPS origin after service creation rather than inventing one.
 - Configure `API_INTERNAL_ORIGIN` in the customer Vercel project's server/build environment to the Render API's HTTPS origin, then rebuild/redeploy the customer app so its `/api` rewrite targets that service. Browser requests remain same-origin with the customer app. Configure the API's `APP_ORIGIN=https://zetmond.vercel.app` for the current customer address; revisit it explicitly if that address changes. Verify session cookies, origin/CSRF checks, HTTPS proxy behaviour and shared-login role routing end to end.
@@ -1410,6 +1413,9 @@ Each test record must identify requirement, preconditions, input/event, expected
 | AT-77 | Customer verifies email while phone remains unverified | Email-only onboarding completes; KYC and other financial eligibility controls still apply; no fake phone verification |
 | AT-78 | Registration, phone-code requests and production email configuration without SMS credentials | Only email is queued; phone verify/resend rejected; SMS credentials not required; working SMTP and other production safeguards still required |
 | AT-79 | Upgrade a database with pending SMS and unused phone codes | SMS cancelled and payload cleared; phone codes consumed; user verification flags unchanged |
+| AT-80 | Explicit hosted staging with pending launch policies | Starts with HTTPS/email requirements intact, secure sessions, staging API metadata and customer notice; approval flags remain unchanged |
+| AT-81 | Production stage omitted/defaulted, or a staging setting is misspelled | Production policy gates remain mandatory; unknown stage rejected; no accidental testing-mode fallback |
+| AT-82 | Approved test identity calls financial APIs in staging | Financial access denied on the backend despite email/KYC approval; auth, role and MFA checks remain enforced |
 
 ### 20.5 Tests blocked by unresolved policy
 
@@ -1686,6 +1692,8 @@ Every customer and advertiser must verify **email** before wallet or trading acc
 - Custody signing/key-management infrastructure, database/Redis/storage providers and service plans, exact versions and final deployment/accounting design remain to be selected. A shared repository does not imply shared production credentials or admin permissions.
 
 ### O26 — Shared login, domains and deployment — Shared login approved; Render/Vercel hosting recorded 5 November 2026; custom domains TBD
+
+Staging update approved 6 November 2026: use the isolated testing deployment described in Section 16.7 while finishing the full product. All features remain in scope for the eventual customer launch; operator/legal contact details are deferred. This does not approve production policy flags or enable financial operations in staging.
 
 The owner replaced the separate-login-page requirement: customers and admins log in on the **same page**. Admin login details are provisioned in the database in advance; store passwords as secure hashes, never plaintext. The backend authenticates, checks the account role, enforces mandatory admin MFA and redirects to the appropriate portal. Every privileged request rechecks authorization. There is no public admin signup.
 
