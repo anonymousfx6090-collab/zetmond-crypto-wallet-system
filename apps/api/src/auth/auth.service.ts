@@ -56,9 +56,10 @@ export class AuthService {
     if (!session) return null;
     // All account operations acquire the user lock before any session/challenge locks.
     const account = (
-      await c.query("SELECT * FROM users WHERE id=$1 FOR UPDATE", [
-        session.user_id,
-      ])
+      await c.query(
+        "SELECT u.*, (SELECT a.mode FROM identity_cases k JOIN identity_attempts a ON a.id=k.current_attempt_id WHERE k.user_id=u.id AND a.status='approved') AS identity_mode FROM users u WHERE u.id=$1 FOR UPDATE",
+        [session.user_id],
+      )
     ).rows[0];
     const active = (
       await c.query(
@@ -100,6 +101,7 @@ export class AuthService {
       state,
       financialAccess:
         this.config.DEPLOYMENT_STAGE !== "staging" &&
+        (this.config.NODE_ENV !== "production" || u.identity_mode === "live") &&
         u.role === "customer" &&
         u.mfa_verified &&
         u.email_verified &&
@@ -108,6 +110,14 @@ export class AuthService {
     };
   }
   async session(c: PoolClient, u: any, agent: string) {
+    if (this.config.NODE_ENV === "production") {
+      u.identity_mode = (
+        await c.query(
+          "SELECT a.mode FROM identity_cases k JOIN identity_attempts a ON a.id=k.current_attempt_id WHERE k.user_id=$1 AND a.status='approved'",
+          [u.id],
+        )
+      ).rows[0]?.mode;
+    }
     const value = token(),
       id = randomUUID(),
       mfaVerified = u.role !== "admin" && !u.mfa_secret;

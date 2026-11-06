@@ -29,6 +29,11 @@ const schema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   MAIL_FROM: z.string().optional(),
+  REDIS_URL: z
+    .string()
+    .url()
+    .refine((v) => ["redis:", "rediss:"].includes(new URL(v).protocol))
+    .optional(),
 });
 export type Config = z.infer<typeof schema>;
 export class ConfigurationError extends Error {}

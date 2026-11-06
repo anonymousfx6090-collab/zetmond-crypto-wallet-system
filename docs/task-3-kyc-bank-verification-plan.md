@@ -1,6 +1,6 @@
 # Task 3 — KYC and bank verification plan
 
-Status: implementation plan updated 6 November 2026. Task 3 application work has not started; provider selection is the first implementation milestone.
+Status: provider-neutral implementation built 6 November 2026 on `feat/task-3-kyc-bank-verification`. Identity/bank records, APIs, screens, durable jobs and BullMQ worker are implemented. Vendor integrations, live sandbox evidence and the decisions below remain outstanding. See [implementation and handoff](task-3-implementation.md).
 
 This plan follows PRD v1.1 Sections 4, 7.4–7.5, 13.3, 16.7, 17.4 and 21.1, and decisions O01, O19, O20, O22, O25 and O26. Provider selection and policies marked TBD in that PRD remain undecided.
 
@@ -12,7 +12,7 @@ Task 2 supplies registration, shared customer/admin login, email-only verificati
 
 Current hosts are `https://zetmond.vercel.app` for customers and `https://zetmond-wallet.onrender.com` for APIs. Hosting details and remaining live checks are documented in [Render staging setup](render-staging.md). Operator details, final notices and production policy approvals remain pending.
 
-When implementation begins, use `feat/task-3-kyc-bank-verification` based on the latest `main` containing that baseline and this plan. The current document records planned work, not implementation or provider approval.
+Implementation is on `feat/task-3-kyc-bank-verification`, based on that `main` baseline plus the saved plan. The sections below retain the delivery requirements; the linked implementation document distinguishes completed code from outstanding provider work.
 
 Launch markets remain Nigeria/NGN, Ghana/GHS, South Africa/ZAR and Kenya/KES. Customers must be at least 18 and complete government-ID plus selfie/liveness verification. Email verification is required; phone numbers remain contact data and do not require SMS verification.
 
@@ -34,12 +34,12 @@ Prefer provider-hosted identity capture to minimize locally held documents. A ba
 
 Record the decision matrix before committing to an integration:
 
-| Market | ID documents and selfie/liveness | Bank identifiers and ownership evidence | Provider sandbox, authenticated results and business eligibility |
-| --- | --- | --- | --- |
-| Nigeria / NGN | TBD; confirm supported government IDs and age evidence | TBD; confirm bank lookup and verified ownership capability | TBD |
-| Ghana / GHS | TBD; confirm supported government IDs and age evidence | TBD; use the provider's Ghana-specific bank schema | TBD |
-| South Africa / ZAR | TBD; confirm supported government IDs and age evidence | TBD; use the provider's South Africa-specific bank schema | TBD |
-| Kenya / KES | TBD; confirm supported government IDs and age evidence | TBD; use the provider's Kenya-specific bank schema | TBD |
+| Market             | ID documents and selfie/liveness                       | Bank identifiers and ownership evidence                    | Provider sandbox, authenticated results and business eligibility |
+| ------------------ | ------------------------------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------- |
+| Nigeria / NGN      | TBD; confirm supported government IDs and age evidence | TBD; confirm bank lookup and verified ownership capability | TBD                                                              |
+| Ghana / GHS        | TBD; confirm supported government IDs and age evidence | TBD; use the provider's Ghana-specific bank schema         | TBD                                                              |
+| South Africa / ZAR | TBD; confirm supported government IDs and age evidence | TBD; use the provider's South Africa-specific bank schema  | TBD                                                              |
+| Kenya / KES        | TBD; confirm supported government IDs and age evidence | TBD; use the provider's Kenya-specific bank schema         | TBD                                                              |
 
 Use current official documentation, account capabilities and sandbox evidence to fill this matrix. No provider, price or country coverage is approved by this plan. KYC and bank verification can use different providers. Bank verification is separate from choosing a fiat collection/payout provider; a standard Monnify contract must not be assumed eligible for Zetmond's crypto/P2P model.
 
@@ -176,13 +176,13 @@ The dynamic webhook notation is a planning shorthand: only explicitly configured
 
 ## Decisions still needed
 
-| Decision | When it blocks work |
-| --- | --- |
-| KYC provider, country/document coverage and sandbox access | Provider-specific capture, signature handling and verified outcomes |
-| Bank-verification provider and ownership/name-match policy | Account schema, trusted match results and exception handling |
-| Redis/worker service arrangement | Hosted durable background processing and restart evidence |
-| Retention, deletion and consent/disclosure rules | Collection/storage of the affected identity evidence and production activation |
-| Legal operator/contact details and final launch policies | Real-customer launch; may remain pending during isolated sandbox development |
+| Decision                                                   | When it blocks work                                                            |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| KYC provider, country/document coverage and sandbox access | Provider-specific capture, signature handling and verified outcomes            |
+| Bank-verification provider and ownership/name-match policy | Account schema, trusted match results and exception handling                   |
+| Redis/worker service arrangement                           | Hosted durable background processing and restart evidence                      |
+| Retention, deletion and consent/disclosure rules           | Collection/storage of the affected identity evidence and production activation |
+| Legal operator/contact details and final launch policies   | Real-customer launch; may remain pending during isolated sandbox development   |
 
 No budget, price or delivery date is assumed. Provider-neutral schema, authorization and unavailable-state screens can progress while these choices are resolved, but they do not constitute a working verification integration.
 

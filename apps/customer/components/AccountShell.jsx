@@ -9,6 +9,8 @@ import {
   MonitorSmartphone,
   LogOut,
   LockKeyhole,
+  ScanFace,
+  Landmark,
 } from "lucide-react";
 import Brand from "./Brand";
 import AppearanceToggle from "./AppearanceToggle";
@@ -19,6 +21,18 @@ const navigation = [
     label: "My account",
     Icon: UserRound,
     screens: ["account", "verify-contacts"],
+  },
+  {
+    href: "/identity",
+    label: "Identity",
+    Icon: ScanFace,
+    screens: ["identity"],
+  },
+  {
+    href: "/banks",
+    label: "Bank accounts",
+    Icon: Landmark,
+    screens: ["banks"],
   },
   {
     href: "/security",
@@ -98,13 +112,17 @@ export default function AccountShell({
           {accountView && (
             <p className="header-breadcrumb">
               Account <span>/</span>{" "}
-              {screen === "sessions"
-                ? "Devices"
-                : screen === "security"
-                  ? "Security"
-                  : screen === "verify-contacts"
-                    ? "Verification"
-                    : "Overview"}
+              {screen === "identity"
+                ? "Identity"
+                : screen === "banks"
+                  ? "Bank accounts"
+                  : screen === "sessions"
+                    ? "Devices"
+                    : screen === "security"
+                      ? "Security"
+                      : screen === "verify-contacts"
+                        ? "Verification"
+                        : "Overview"}
             </p>
           )}
           <div className="header-actions">
@@ -132,7 +150,7 @@ export default function AccountShell({
         )}
         <main id="main" className={accountView ? "account-main" : "auth-main"}>
           <div
-            className={`content ${["account", "security", "sessions", "verify-contacts"].includes(screen) ? "wide" : ""}`}
+            className={`content ${["account", "security", "sessions", "verify-contacts", "identity", "banks"].includes(screen) ? "wide" : ""}`}
           >
             {children}
           </div>

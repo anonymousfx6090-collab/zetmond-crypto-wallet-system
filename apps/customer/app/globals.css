@@ -1533,3 +1533,188 @@ img {
     scroll-behavior: auto !important;
   }
 }
+
+/* Identity and bank verification share the existing account visual language. */
+.verification-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.verification-panel,
+.verification-guide {
+  padding: 28px;
+  min-width: 0;
+}
+.verification-panel h2,
+.verification-guide h2 {
+  margin: 20px 0 12px;
+}
+.verification-panel p,
+.verification-guide p {
+  color: var(--muted);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.verification-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.verification-symbol {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 20px;
+  background: var(--lavender);
+  color: var(--purple);
+}
+.verification-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  margin: 20px 0;
+}
+.verification-notice svg {
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.verification-notice p {
+  margin: 0;
+}
+.verification-guide ol,
+.bank-destinations {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0;
+}
+.verification-guide li {
+  display: flex;
+  gap: 14px;
+  margin: 24px 0;
+}
+.verification-guide li > span {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.verification-guide h3,
+.bank-destinations h3 {
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+.verification-guide p {
+  margin: 0;
+  font-size: 14px;
+}
+.verification-footnote {
+  display: flex;
+  gap: 10px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.verification-footnote svg {
+  flex-shrink: 0;
+}
+.verification-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 20px 0;
+  line-height: 1.6;
+}
+.verification-consent input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.verification-refresh {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.verification-panel > .primary {
+  margin-top: 20px;
+}
+.verification-empty {
+  padding: 30px 12px;
+  margin: 20px 0;
+  border: 1px dashed var(--border);
+  border-radius: 16px;
+  text-align: center;
+}
+.bank-destinations li {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bank-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 28px;
+}
+.bank-form label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.bank-form input,
+.bank-form select {
+  width: 100%;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+@media (max-width: 900px) {
+  .verification-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 600px) {
+  .verification-panel,
+  .verification-guide {
+    padding: 20px;
+  }
+  .bank-destinations li {
+    flex-direction: column;
+  }
+  .mobile-account-nav .account-nav {
+    overflow-x: auto;
+  }
+  .mobile-account-nav .account-nav a {
+    flex-shrink: 0;
+  }
+}
+
+.page-heading {
+  margin-bottom: 28px;
+}
+.page-heading > p:last-child {
+  color: var(--muted);
+  line-height: 1.7;
+}
+.mobile-account-nav .account-nav {
+  overflow-x: auto;
+}
+.mobile-account-nav .account-nav a {
+  flex-shrink: 0;
+}
