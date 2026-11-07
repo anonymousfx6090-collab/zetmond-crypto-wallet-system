@@ -29,6 +29,9 @@ const schema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   MAIL_FROM: z.string().optional(),
+  SMILE_ID_PARTNER_ID: z.string().trim().min(1).max(100).optional(),
+  SMILE_ID_API_KEY: z.string().trim().min(1).max(4096).optional(),
+  SMILE_ID_MODE: z.enum(["sandbox", "live"]).default("sandbox"),
   REDIS_URL: z
     .string()
     .url()

@@ -2,7 +2,7 @@
 
 Built 6 November 2026 on `feat/task-3-kyc-bank-verification`, based on main `e37e15a` and plan `5b9ab63`.
 
-**Status: provider-neutral implementation, not completed provider integration.** The owner selected Smile ID for KYC on 7 November 2026 and has not created a provider account yet. Bank verification remains unselected. No live/sandbox vendor account, country coverage, price, contract eligibility or matching policy has been verified. The production provider registry is deliberately empty. Deployed screens therefore show verification unavailable and accept no identity or bank submissions. Test adapters exist only in automated test code and cannot be selected through an environment variable or HTTP request.
+**Status: provider-neutral implementation, not completed provider integration.** The owner selected Smile ID for KYC on 7 November 2026 and has since reported access to Sandbox Credentials. Bank verification remains unselected. No live/sandbox vendor account, country coverage, price, contract eligibility or matching policy has been verified. The production provider registry is deliberately empty. Deployed screens therefore show verification unavailable and accept no identity or bank submissions. Test adapters exist only in automated test code and cannot be selected through an environment variable or HTTP request.
 
 ## Implemented
 
@@ -39,7 +39,7 @@ The identity/bank UI is separate from `AccountApp.jsx` and shares its logo, them
 
 ## Provider recommendation and decisions
 
-**Smile ID is selected for KYC**, following the owner’s decision on 7 November 2026. An account and sandbox access are still needed. The official Node SDK and its examples have been inspected; the full documentation site is blocked by this workspace’s network policy. This establishes the SDK signing/token/status contracts, not country coverage, an account-enabled capture flow or verified outcomes. See [Smile ID setup and integration findings](smile-id-setup.md).
+**Smile ID is selected for KYC**, following the owner’s decision on 7 November 2026. The owner has since opened Sandbox Credentials; actual authenticated sandbox evidence is still needed. The official Node SDK and its examples have been inspected; the full documentation site is blocked by this workspace’s network policy. This establishes the SDK signing/token/status contracts, not country coverage, an account-enabled capture flow or verified outcomes. See [Smile ID setup and integration findings](smile-id-setup.md).
 
 Treat bank ownership as a separate selection. A bank-account-name lookup alone is insufficient. Require verifiable evidence tied to the exact destination and verified identity, with an agreed matching policy. Do not assume an existing payment provider's contract covers crypto/P2P.
 
@@ -80,7 +80,7 @@ node apps/api/dist/worker.js
 
 Share the appropriate staging database, encryption key and provider configuration with that worker. Apply migrations through the API deployment first. Use Redis with a `noeviction` policy and provider-appropriate persistence/availability. Redis credentials stay server-side. The worker deliberately exits with an explanatory message when no providers are configured; **do not provision a continuously restarting Render worker before an adapter is selected**.
 
-There are no real provider-specific environment variables yet. Those must match the selected adapter and its documented authentication. No hosted worker/Redis service was created, no Vercel/Render deployment triggered, and no live KYC collection enabled by this branch.
+`SMILE_ID_PARTNER_ID`, `SMILE_ID_API_KEY` and `SMILE_ID_MODE=sandbox` now prepare Smile ID credentials for the server-only request client. The client is not yet an active capture/decision adapter. See [Smile ID setup](smile-id-setup.md) for credential storage and remaining contracts. No hosted worker/Redis service was created, no Vercel/Render deployment triggered, and no live KYC collection enabled by this branch.
 
 ## Validation and remaining evidence
 

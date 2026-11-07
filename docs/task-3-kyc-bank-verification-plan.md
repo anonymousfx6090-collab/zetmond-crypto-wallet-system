@@ -1,6 +1,6 @@
 # Task 3 — KYC and bank verification plan
 
-Status: provider-neutral implementation built 6 November 2026 on `feat/task-3-kyc-bank-verification`. Identity/bank records, APIs, screens, durable jobs and BullMQ worker are implemented. Smile ID was selected for KYC on 7 November 2026; the owner has no provider account yet. Vendor integrations, real sandbox evidence, bank-provider selection and the decisions below remain outstanding. See [implementation and handoff](task-3-implementation.md).
+Status: provider-neutral implementation built 6 November 2026 on `feat/task-3-kyc-bank-verification`. Identity/bank records, APIs, screens, durable jobs and BullMQ worker are implemented. Smile ID was selected for KYC on 7 November 2026; the owner has since opened Sandbox Credentials, and the server credential/request client is prepared. Vendor integrations, real sandbox evidence, bank-provider selection and the decisions below remain outstanding. See [implementation and handoff](task-3-implementation.md).
 
 This plan follows PRD v1.1 Sections 4, 7.4–7.5, 13.3, 16.7, 17.4 and 21.1, and decisions O01, O19, O20, O22, O25 and O26. O19 now selects Smile ID for KYC. Bank-provider selection, country/document coverage and other policies marked TBD in that PRD remain undecided.
 
