@@ -19,32 +19,7 @@ import {
   Globe2,
 } from "lucide-react";
 
-async function api(path, data, method = data === undefined ? "GET" : "POST") {
-  let r;
-  try {
-    r = await fetch(`/api/${path}`, {
-      method,
-      credentials: "same-origin",
-      cache: "no-store",
-      headers: { "Content-Type": "application/json", "X-Zetmond-Request": "1" },
-      ...(data === undefined ? {} : { body: JSON.stringify(data) }),
-    });
-  } catch {
-    throw new Error(
-      "Cannot connect right now. Check your connection and try again.",
-    );
-  }
-  const body = await r
-    .json()
-    .catch(() => ({ message: "Service unavailable. Please try again." }));
-  if (!r.ok) {
-    const e = new Error(body.message || "Unable to complete this request.");
-    e.fields = body.fields;
-    e.status = r.status;
-    throw e;
-  }
-  return body;
-}
+import { api } from "../lib/api";
 function destination(u) {
   return (
     {
@@ -712,7 +687,7 @@ export default function AccountApp({ screen }) {
                     detail:
                       user.kycStatus === "approved"
                         ? "Your identity has been verified."
-                        : "Identity verification will be available soon.",
+                        : "View your identity checks and next steps.",
                     done: user.kycStatus === "approved",
                     Icon: UserRound,
                   },
@@ -732,7 +707,9 @@ export default function AccountApp({ screen }) {
                         <ArrowUpRight size={20} />
                       </Link>
                     ) : (
-                      <span className="checklist-status">Upcoming</span>
+                      <Link href="/identity" aria-label={label}>
+                        <ArrowUpRight size={20} />
+                      </Link>
                     )}
                   </li>
                 ))}

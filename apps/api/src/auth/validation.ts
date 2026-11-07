@@ -47,7 +47,12 @@ export const changeSchema = z
   .strict();
 export const stepSchema = z
   .object({
-    purpose: z.enum(["password_change", "contact_change", "withdrawal"]),
+    purpose: z.enum([
+      "password_change",
+      "contact_change",
+      "withdrawal",
+      "bank_add",
+    ]),
     operationDigest: z.string().regex(/^[a-f0-9]{64}$/),
     code: z.string().min(6).max(80),
   })

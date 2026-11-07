@@ -4,6 +4,7 @@ import nodemailer from "nodemailer";
 import { Database } from "../db";
 import { Config } from "../config";
 import { seal, unseal } from "../crypto";
+import { deliveryFailure } from "./failure";
 export type Message = { to: string; subject: string; text: string };
 export class Delivery {
   constructor(
@@ -69,14 +70,12 @@ export class Delivery {
             "UPDATE delivery_outbox SET status='delivered',payload='',delivered_at=now() WHERE id=$1",
             [row.id],
           );
-        } catch {
+        } catch (error: unknown) {
           await c.query(
             "UPDATE delivery_outbox SET attempts=attempts+1,status=CASE WHEN attempts>=4 THEN 'failed' ELSE 'queued' END,next_attempt_at=now()+interval '1 minute' * power(2,least(attempts,5)) WHERE id=$1",
             [row.id],
           );
-          console.warn(
-            "Contact delivery failed; inspect outbox status without exposing message contents",
-          );
+          console.warn(`Contact delivery failed (${deliveryFailure(error)}).`);
         }
       }
     });
