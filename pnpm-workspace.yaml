@@ -3,3 +3,5 @@ packages:
 allowBuilds:
   argon2: true
   esbuild: true
+  # Skip the optional native build; BullMQ's msgpackr supports a JS fallback.
+  msgpackr-extract: false
