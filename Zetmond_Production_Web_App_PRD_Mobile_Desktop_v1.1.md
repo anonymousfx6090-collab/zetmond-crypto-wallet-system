@@ -1517,7 +1517,7 @@ Server events provide evidence of financial outcomes. A browser click named “p
 
 ### 23.1 Status and authority
 
-The following answers were explicitly supplied or approved by the owner in the decision review ending 3 November 2026 (Africa/Lagos), with O10/O23 updated by the owner's negotiated-price approval, O25/O26 by the Render API hosting choice, and O22/O24 by the email-only/no-SMS decision on 5 November 2026. “Approved” records product intent, not implementation completion or provider/legal feasibility. “Approved baseline; details TBD” means only the stated baseline is approved. Resolve remaining details before enabling the affected operation. The original O01–O29 identifiers are retained.
+The following answers were explicitly supplied or approved by the owner in the decision review ending 3 November 2026 (Africa/Lagos), with O10/O23 updated by the owner's negotiated-price approval, O25/O26 by the Render API hosting choice, O22/O24 by the email-only/no-SMS decision on 5 November 2026, and O19 by the owner's Smile ID selection on 7 November 2026. “Approved” records product intent, not implementation completion or provider/legal feasibility. “Approved baseline; details TBD” means only the stated baseline is approved. Resolve remaining details before enabling the affected operation. The original O01–O29 identifiers are retained.
 
 ### O01 — Launch countries and markets — Approved
 
@@ -1637,9 +1637,9 @@ If a bank refund charge equals or exceeds the received amount, enter manual revi
 
 Initiate seller fiat payout first. After verified payout success, credit the buyer's agreed USDT principal internally. Mark the trade completed only when both obligations succeed. Verify unknown external outcomes before retrying and preserve successful legs while recovering only outstanding obligations. Later reversals enter manual review; no automatic customer debit is authorized. Numeric retry/escalation limits, liquidity/prefunding requirements and post-completion reversal liability remain TBD.
 
-### O19 — KYC and eligibility — Approved baseline; provider/documents TBD
+### O19 — KYC and eligibility — Smile ID selected; coverage/documents pending
 
-Customers must be 18 or older. Require government ID plus selfie/liveness verification through a provider/process covering the four launch countries. Financial access requires approved KYC. Identity changes or risk events may trigger reverification. Provider, accepted country-specific documents, evidence/finality rules, ongoing restriction/reverification details and related exception handling remain TBD. Never discard existing financial obligations when eligibility changes.
+Customers must be 18 or older. Require government ID plus selfie/liveness verification through a provider/process covering the four launch countries. Financial access requires approved KYC. Identity changes or risk events may trigger reverification. The owner selected **Smile ID for KYC on 7 November 2026** and confirmed that a Smile ID account has not yet been created. Sandbox access, account eligibility and supported checks/documents for Nigeria, Ghana, South Africa and Kenya remain unverified. Accepted country-specific documents, evidence/finality rules, ongoing restriction/reverification details and related exception handling remain TBD. Bank ownership verification is a separate integration decision; selecting Smile ID for KYC does not establish bank coverage. Follow [Smile ID setup](docs/smile-id-setup.md). Never discard existing financial obligations when eligibility changes.
 
 ### O20 — Authentication and account security — Approved baseline; exact limits TBD
 
@@ -1735,7 +1735,7 @@ The question review is complete, but these items remain open. Approval of an exc
 | Advertisers | Detailed Verified/Block criteria, history windows, collateral deductions/release process and per-account exposure limits | O08/O09/O21 |
 | Monetary policy | Detailed deterministic calculation sequence, taxes and exceptional small-refund cost/resolution rules | O15/O16/O17 |
 | Settlement | Numeric retry/escalation limits, prefunding/liquidity and post-completion reversal liability | O18 |
-| Identity/security | KYC provider/documents, restriction exceptions, exact timeouts/lockouts and recovery procedures | O19/O20 |
+| Identity/security | Smile ID account access and country/document coverage, restriction exceptions, exact timeouts/lockouts and recovery procedures | O19/O20 |
 | Administration | Action/approval matrix, permitted financial adjustments, provisioning and actual second approver | O21 |
 | Support/privacy | Retention, dispute liability, appeals/escalation limits, staffing, holiday coverage and evidence totals | O24 |
 | Infrastructure | Render API URL/service plan, database/Redis/storage hosting, custom/admin domains, deploy/session verification and operational service selections; API host Render and frontend host Vercel are selected | O25/O26; Section 16.7 |

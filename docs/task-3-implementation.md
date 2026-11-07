@@ -2,7 +2,7 @@
 
 Built 6 November 2026 on `feat/task-3-kyc-bank-verification`, based on main `e37e15a` and plan `5b9ab63`.
 
-**Status: provider-neutral implementation, not completed provider integration.** The owner has no verification provider yet. No live/sandbox vendor account, country coverage, price, contract eligibility or matching policy has been verified. The production provider registry is deliberately empty. Deployed screens therefore show verification unavailable and accept no identity or bank submissions. Test adapters exist only in automated test code and cannot be selected through an environment variable or HTTP request.
+**Status: provider-neutral implementation, not completed provider integration.** The owner selected Smile ID for KYC on 7 November 2026 and has not created a provider account yet. Bank verification remains unselected. No live/sandbox vendor account, country coverage, price, contract eligibility or matching policy has been verified. The production provider registry is deliberately empty. Deployed screens therefore show verification unavailable and accept no identity or bank submissions. Test adapters exist only in automated test code and cannot be selected through an environment variable or HTTP request.
 
 ## Implemented
 
@@ -39,16 +39,16 @@ The identity/bank UI is separate from `AccountApp.jsx` and shares its logo, them
 
 ## Provider recommendation and decisions
 
-Evaluate **Smile ID first for identity verification**, and compare **Prembly**. This is a shortlist for evaluation, not a claim that either currently supports Zetmond's exact documents, all four markets, pricing or business model. Starting points: [Smile ID](https://usesmileid.com/), [Prembly](https://prembly.com/). Current official contracts and sandbox evidence are still needed; they were not accessible/verified as part of this build.
+**Smile ID is selected for KYC**, following the owner’s decision on 7 November 2026. An account and sandbox access are still needed. The official Node SDK and its examples have been inspected; the full documentation site is blocked by this workspace’s network policy. This establishes the SDK signing/token/status contracts, not country coverage, an account-enabled capture flow or verified outcomes. See [Smile ID setup and integration findings](smile-id-setup.md).
 
 Treat bank ownership as a separate selection. A bank-account-name lookup alone is insufficient. Require verifiable evidence tied to the exact destination and verified identity, with an agreed matching policy. Do not assume an existing payment provider's contract covers crypto/P2P.
 
 | Market             | KYC provider/documents/liveness | Bank schema and ownership evidence                            | Enabled now |
 | ------------------ | ------------------------------- | ------------------------------------------------------------- | ----------- |
-| Nigeria / NGN      | Pending provider evaluation     | Pending provider and matching policy                          | No          |
-| Ghana / GHS        | Pending provider evaluation     | Pending country-specific bank schema and ownership capability | No          |
-| South Africa / ZAR | Pending provider evaluation     | Pending country-specific bank schema and ownership capability | No          |
-| Kenya / KES        | Pending provider evaluation     | Pending country-specific bank schema and ownership capability | No          |
+| Nigeria / NGN      | Smile ID selected; checks/documents unconfirmed     | Pending provider and matching policy                          | No          |
+| Ghana / GHS        | Smile ID selected; checks/documents unconfirmed     | Pending country-specific bank schema and ownership capability | No          |
+| South Africa / ZAR | Smile ID selected; checks/documents unconfirmed     | Pending country-specific bank schema and ownership capability | No          |
+| Kenya / KES        | Smile ID selected; checks/documents unconfirmed     | Pending country-specific bank schema and ownership capability | No          |
 
 Before enabling an adapter, record supported countries/documents, minimum fields, sandbox and live account eligibility, privacy/consent wording, retention/deletion responsibility, rejection/appeal path, name matching/joint/business-account rules and costs. Bank retirement policy remains undecided. No budget or launch date is assumed.
 
