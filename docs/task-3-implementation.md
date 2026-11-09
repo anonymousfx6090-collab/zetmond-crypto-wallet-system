@@ -43,12 +43,12 @@ The identity/bank UI is separate from `AccountApp.jsx` and shares its logo, them
 
 Treat bank ownership as a separate selection. A bank-account-name lookup alone is insufficient. Require verifiable evidence tied to the exact destination and verified identity, with an agreed matching policy. Do not assume an existing payment provider's contract covers crypto/P2P.
 
-| Market             | KYC provider/documents/liveness | Bank schema and ownership evidence                            | Enabled now |
-| ------------------ | ------------------------------- | ------------------------------------------------------------- | ----------- |
-| Nigeria / NGN      | Smile ID selected; checks/documents unconfirmed     | Pending provider and matching policy                          | No          |
-| Ghana / GHS        | Smile ID selected; checks/documents unconfirmed     | Pending country-specific bank schema and ownership capability | No          |
-| South Africa / ZAR | Smile ID selected; checks/documents unconfirmed     | Pending country-specific bank schema and ownership capability | No          |
-| Kenya / KES        | Smile ID selected; checks/documents unconfirmed     | Pending country-specific bank schema and ownership capability | No          |
+| Market             | KYC provider/documents/liveness                 | Bank schema and ownership evidence                            | Enabled now |
+| ------------------ | ----------------------------------------------- | ------------------------------------------------------------- | ----------- |
+| Nigeria / NGN      | Smile ID selected; checks/documents unconfirmed | Pending provider and matching policy                          | No          |
+| Ghana / GHS        | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability | No          |
+| South Africa / ZAR | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability | No          |
+| Kenya / KES        | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability | No          |
 
 Before enabling an adapter, record supported countries/documents, minimum fields, sandbox and live account eligibility, privacy/consent wording, retention/deletion responsibility, rejection/appeal path, name matching/joint/business-account rules and costs. Bank retirement policy remains undecided. No budget or launch date is assumed.
 
@@ -80,13 +80,15 @@ node apps/api/dist/worker.js
 
 Share the appropriate staging database, encryption key and provider configuration with that worker. Apply migrations through the API deployment first. Use Redis with a `noeviction` policy and provider-appropriate persistence/availability. Redis credentials stay server-side. The worker deliberately exits with an explanatory message when no providers are configured; **do not provision a continuously restarting Render worker before an adapter is selected**.
 
-`SMILE_ID_PARTNER_ID`, `SMILE_ID_API_KEY` and `SMILE_ID_MODE=sandbox` now configure a server-only V3 token-authentication client, with short-lived token caching and an owner-operated credential check. The preliminary V1 methods have been replaced; the client is not yet an active capture/decision adapter. See [Smile ID setup](smile-id-setup.md) for credential storage and remaining contracts. No hosted worker/Redis service was created, no Vercel/Render deployment triggered, and no live KYC collection enabled by this branch.
+`SMILE_ID_PARTNER_ID`, `SMILE_ID_API_KEY` and `SMILE_ID_MODE=sandbox` now configure a server-only V3 client with short-lived token authentication, an owner-operated credential check and fresh-image multipart submission/acceptance tracking. The preliminary V1 methods have been replaced; the client is not yet an active capture/decision adapter. See [Smile ID setup](smile-id-setup.md) for credential storage and remaining contracts. No hosted worker/Redis service was created, no Vercel/Render deployment triggered, and no live KYC collection enabled by this branch.
 
 ## Validation and remaining evidence
 
 Results: **41 backend tests and 13 browser tests passed**, including the local Redis recovery test. API TypeScript and customer production builds passed; the updated dependency lockfile passed a frozen install. These results do not establish a vendor integration or live deployment.
 
 Build follow-up, 7 November 2026: a fresh `CI=1 pnpm install --frozen-lockfile` reproduced `ERR_PNPM_IGNORED_BUILDS` for BullMQ's transitive `msgpackr-extract@3.0.7`. The earlier install used `--ignore-scripts`, which missed this failure. `pnpm-workspace.yaml` now explicitly sets `allowBuilds.msgpackr-extract: false`, skipping that optional native build while retaining pnpm's checks and the existing Argon2/esbuild permissions. A clean install with scripts enabled passed. The normal `pnpm build:auth` and `pnpm build` commands passed with Turbopack. All 41 backend tests passed with `MSGPACKR_NATIVE_ACCELERATION_DISABLED=true`, including Redis/BullMQ recovery, and all 13 customer plus 8 marketing browser tests passed using installed Chromium in the isolated workspace. GitHub Actions and Vercel logs were blocked by this workspace's network policy, so this reproduces the repository failure locally rather than confirming the remote deployments.
+
+Smile ID transport follow-up, 9 November 2026: the isolated API TypeScript build and 30 targeted checks passed (17 authentication/client and 13 document submission). These verify the supplied V3 contract using mocked HTTP and synthetic image-header bytes. They do not demonstrate real credential authentication, valid capture/liveness, provider acceptance or final KYC decisions. The Smile ID adapter remains inactive pending result/webhook/capture contracts and vendor-backed validation.
 
 Automated tests use only a dedicated local PostgreSQL database whose name ends in `_test`, and temporary local Redis. Private environment files are excluded from the isolated build/test workspace.
 

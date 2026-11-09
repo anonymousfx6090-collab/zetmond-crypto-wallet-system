@@ -1,5 +1,12 @@
 import { performance } from "node:perf_hooks";
 import { Config, ConfigurationError } from "../config";
+import {
+  prepareSmileIdDocument,
+  parseSmileIdAcceptance,
+  SmileIdSubmissionError,
+  SmileIdDocumentRequest,
+  SmileIdSubmissionAccepted,
+} from "./smile-id.document";
 
 const tokenUrls = {
   sandbox: "https://testapi.smileidentity.com/v3/token",
@@ -69,6 +76,67 @@ export class SmileIdClient {
       "SmileID-Partner-ID": this.#partnerId,
       "SmileID-Token": await this.getAccessToken(),
     };
+  }
+  /** Persists nothing by itself: the adapter must durably record intent before
+   * invoking this, save the generated job ID, and reconcile unknown outcomes.
+   * Never automatically retries a verification, including after token rejection.
+   */
+  async submitDocumentVerification(
+    input: SmileIdDocumentRequest,
+  ): Promise<SmileIdSubmissionAccepted> {
+    const prepared = await prepareSmileIdDocument(input);
+    let headers: Record<string, string>;
+    try {
+      headers = await this.getRequestHeaders();
+    } catch {
+      throw new SmileIdSubmissionError(
+        "not_submitted",
+        "Smile ID authentication unavailable; document was not submitted.",
+      );
+    }
+    let response: Response;
+    try {
+      response = await this.#transport(
+        tokenUrls[this.mode].replace(/\/token$/, "/document_verification"),
+        {
+          method: "POST",
+          headers: { ...headers, Accept: "application/json" },
+          body: prepared.form,
+          redirect: "error",
+          credentials: "omit",
+          signal: AbortSignal.timeout(60000),
+          // Native FormData supplies its boundary; do not manually set Content-Type.
+        },
+      );
+    } catch {
+      throw new SmileIdSubmissionError(
+        "unknown",
+        "Smile ID submission outcome is unknown; reconcile before retrying.",
+      );
+    }
+    if (response.status !== 202) {
+      if (response.status === 401)
+        this.invalidateAccessToken(headers["SmileID-Token"]);
+      try {
+        await response.body?.cancel();
+      } catch {
+        /* Never expose response contents. */
+      }
+      throw new SmileIdSubmissionError(
+        "unknown",
+        `Smile ID did not acknowledge submission (HTTP ${response.status}); reconcile before retrying.`,
+      );
+    }
+    let data: Record<string, unknown>;
+    try {
+      data = await this.#readResponse(response);
+    } catch {
+      throw new SmileIdSubmissionError(
+        "unknown",
+        "Smile ID submission acknowledgement is unreadable; reconcile before retrying.",
+      );
+    }
+    return parseSmileIdAcceptance(data, prepared);
   }
   /** On an authentication failure, pass the rejected token. A late rejection of
    * an older token must not evict a newer token. This never replays an API request.
@@ -154,7 +222,7 @@ export class SmileIdClient {
         throw new Error("Invalid provider response");
       return data as Record<string, unknown>;
     } catch {
-      throw new SmileIdError("Smile ID returned an invalid token response.");
+      throw new SmileIdError("Smile ID returned an invalid provider response.");
     }
   }
 }

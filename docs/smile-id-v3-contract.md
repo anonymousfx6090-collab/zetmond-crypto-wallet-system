@@ -6,7 +6,7 @@ Source: the owner supplied the text of Smile ID's current **Document Verificatio
 
 - Document Verification checks the document, selfie/document face match, liveness and fraud indicators. It extracts document data; it does not require an issuing-authority lookup.
 - The documented submission path is `POST /v3/document_verification`. Requests are asynchronous: `202 Accepted` supplies `job_id` and `user_id` for tracking.
-- Inputs include document/selfie/liveness images, issuing country and a callback URL. Document-type selection is optional. The overview does not specify the exact wire field names, headers or image encoding.
+- The subsequent body reference specifies multipart binary `selfie_image` (JPEG), 6–8 repeated `liveness_images` (JPEG), `document` (front, JPEG/PNG), optional `document_back`, consent, country, user details, optional ID type, user identifier, callback and partner metadata. The server token helper issues no enrolled-image grant or SDK count override, so its fresh-image submission path always requires the selfie and default 6–8 frames.
 - Final results arrive through a webhook. Canonical result retrieval reports `processing` while work is outstanding. Webhook replay is supported, but its exact authentication/retry contract is in separate documentation.
 - `status`, `message` and `reason` describe the outcome. Extracted `id_fields` vary with document/country. Image links can be sensitive and are not needed in ordinary customer responses.
 
@@ -26,6 +26,20 @@ The owner subsequently supplied the token contract:
 
 The server client now implements the documented bodyless authentication request and token lifecycle. Scoped multipart/browser tokens are not implemented by this helper. No real credential/token was provided in chat, and fixture tests do not prove live authentication.
 
+## Submission and consent supplied by the owner
+
+The submission body uses JPEG selfie and 6–8 JPEG liveness images, JPEG/PNG document front and optional back. `user_details` needs email or phone; the current server transport implements the email path. It requires a stable partner user ID, explicit HTTPS callback and launch-country code rather than relying on generated identifiers or an account-default callback. Optional ID type is omitted unless explicitly selected.
+
+Consent fields are `granted: true`, `granted_at` (ISO datetime), `notice_language` (two uppercase letters), and `notice_privacy_policy_url` (HTTPS). The future adapter must derive these from an actual, durable user acknowledgement and the notice shown, not arbitrary browser-supplied values.
+
+A 202 response has `status: accepted`, `message`, generated `job_id`, `user_id` and `created_at`. The client validates tracking fields, checks the returned user, and preserves the generated job ID separately from the internal UUID operation ID. It returns only acceptance metadata, never an approval or arbitrary provider details.
+
+The client sends `partner_params.zetmond_operation_id` for correlation. This is **not a confirmed provider idempotency mechanism**. Intents and provider job references must be persisted by the future adapter. Token failure/input rejection is distinguished from an uncertain dispatched operation; no document request is automatically replayed, including after a 401. A valid job ID in a malformed/mismatched acknowledgement is retained on the uncertainty error for reconciliation.
+
+Structured multipart fields are currently serialized as JSON text using native FormData. The supplied descriptions do not include an actual multipart curl example or object-part encoding rules; confirm this encoding and the full `user_details` schema in vendor examples/sandbox before activation. Original image filenames are replaced by generic role names.
+
+Zetmond's provisional outbound budgets are 10 MiB per image, 40 MiB total image bytes and 16 KiB per JSON metadata field. These are **local transport guards, not documented Smile ID limits**. Basic MIME/byte-signature checks do not prove a valid image, liveness or identity. Provider image size/quality limits and a supported capture procedure remain to confirm. Encrypted SDK packages, enrolled-selfie grants, SDK count overrides and telemetry are not implemented in this fresh-image method.
+
 | Vendor disposition | Required Zetmond handling                                                                                                                                                                                                                        |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `clear`            | Consider approval only after the authenticated result is bound to the current operation and required identity evidence, country and minimum age are validated. A status string alone is insufficient.                                            |
@@ -37,7 +51,7 @@ The documented reasons include age/expiry, document-copy and risk signals, face/
 
 ## Existing code boundary
 
-`src/providers/smile-id.client.ts` now implements **V3 server token authentication** from the supplied contract, replacing the preliminary V1 signing/web-token/job-status methods. Verification submission, canonical result retrieval, webhook handling and capture still need their own verified schemas. Do not register an active provider based on token acquisition alone.
+`src/providers/smile-id.client.ts` now implements **V3 server token authentication** from the supplied contract, replacing the preliminary V1 signing/web-token/job-status methods. A fresh-image multipart submission transport and 202 tracking parser are now implemented from the supplied body/consent reference. Canonical result retrieval, webhook handling and capture still need their own verified schemas. Do not register an active provider based on token acquisition alone.
 
 The generic Task 3 backend already supports durable work, independently authenticated provider callbacks, canonical reconciliation, owner protection, case history and eligibility checks. These remain integration points; no Smile ID adapter is active. Storing Render credentials does not establish authentication or completed KYC.
 
@@ -45,7 +59,7 @@ The generic Task 3 backend already supports durable work, independently authenti
 
 The supplied page links to these current documentation resources:
 
-1. **Perform a Document Verification** — `/api-reference/products/document-verification/perform-a-document-verification.md`: environment/base URLs, authentication headers, exact body/image format, operation identifiers, acceptance response and errors. Confirm idempotency and recovery after an uncertain submission.
+1. **Perform a Document Verification** — `/api-reference/products/document-verification/perform-a-document-verification.md`: body, consent and acceptance descriptions have been supplied. Still obtain the actual multipart example/object encoding, complete `user_details` schema, image quality/size limits and error/retry semantics. Confirm idempotency and recovery after an uncertain submission.
 2. **Retrieve a Verification Result** — `/api-reference/core-resources/verification-status/retrieve-a-verification-result.md`: lookup identifiers, canonical response schema, extracted name/DOB/country fields, finality and any versioning/reconciliation guarantees.
 3. **Webhook Types — Document Verification** — `/developer-resources/essentials/verification-webhooks/webhook-types/document-verification.md`: event envelope, result payload and job/customer correlation. Also obtain the receive-webhooks authentication/signature documentation before implementing intake.
 4. **Resend Webhook** — `/developer-resources/essentials/verification-webhooks/receive-webhooks/resend-webhook.md`: delivery, replay and retries.

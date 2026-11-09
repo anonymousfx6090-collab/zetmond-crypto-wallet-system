@@ -1,6 +1,6 @@
 # Smile ID setup for Task 3
 
-Updated 9 November 2026. The owner selected Smile ID for KYC, obtained sandbox credentials and reported saving them in Render. The owner last confirmed that the API health check returned staging. **The code now implements V3 token authentication; no Smile ID verification adapter is active and Task 3 is not complete.** Bank verification remains a separate integration decision.
+Updated 9 November 2026. The owner selected Smile ID for KYC, obtained sandbox credentials and reported saving them in Render. The owner last confirmed that the API health check returned staging. **The code now implements V3 token authentication and a fresh-image document-submission transport; no Smile ID verification adapter is active and Task 3 is not complete.** Bank verification remains a separate integration decision.
 
 ## Render credential settings
 
@@ -53,9 +53,19 @@ The owner supplied the current Document Verification overview and V3 token metho
 
 The official `smile-identity-core` 3.2.1 SDK was initially inspected at repository commit `2e0ecd623f40d1ba944b06fe43dbdcc4176cfff5`. That older SDK documented V1 signing/web-token/job-status primitives. The preliminary V1 methods have now been removed from the client rather than mixed with the supplied V3 contract; their original fixture tests are superseded by V3 authentication tests.
 
+## Document submission transport
+
+The server client can prepare and submit the fresh-image multipart path described by the owner: document/selfie/liveness parts, four-field consent, country, email contact, a stable user ID, explicit callback, optional document back/ID type and operation-correlation metadata. It accepts the generated job ID separately from Zetmond's internal operation ID. `202 Accepted` is not KYC approval. It does not support enrolled-image grants or encrypted SDK packages yet.
+
+The adapter is still inactive. It must durably record an intent before submission and save/recover the generated job ID. `SmileIdSubmissionError.outcome` distinguishes `not_submitted` from `unknown`. An uncertain result, including malformed acceptance or unexpected HTTP response, must be reconciled before retrying; the transport never automatically replays a document request. Known job references are preserved on uncertainty errors when available.
+
+JSON text is used for structured multipart parts; verify against the vendor's actual curl example/sandbox before activation. Confirm the complete user-details schema and vendor image limits. Local budgets and basic byte-signature checks are transport guards, not identity checks. See the [V3 contract review](smile-id-v3-contract.md).
+
+Validation: 13 document-submission checks and all 17 authentication/client checks passed, along with the isolated API TypeScript build. The new checks cover native multipart encoding, consent and image constraints, correlation, response binding and uncertain outcomes without replay. They use mocked HTTP responses and synthetic image-header bytes, not real identity evidence or a Smile ID sandbox call.
+
 ## Remaining integration work
 
-- Obtain the full document-verification request body, image encoding/limits, operation identifiers and idempotency/recovery rules.
+- Confirm multipart object encoding against a real documentation example, full user-details schema, vendor image limits and idempotency/recovery rules. Body/consent fields and acceptance tracking have been supplied and implemented in the transport.
 - Verify the current web/Smile Links or other supported browser capture contract. The supplied overview documents REST and mobile SDKs, not a complete hosted-web procedure.
 - Obtain canonical result lookup and webhook authentication/payload schemas, including job/customer binding, name/DOB/country evidence and finality/versioning.
 - Implement the adapter with durable intents, authenticated callbacks, reconciliation, correction history, strict age/country checks and mode isolation. Register it only after these checks are implemented.
