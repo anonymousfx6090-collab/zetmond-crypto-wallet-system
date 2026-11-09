@@ -49,6 +49,21 @@ Zetmond's provisional outbound budgets are 10 MiB per image, 40 MiB total image 
 
 The documented reasons include age/expiry, document-copy and risk signals, face/liveness/document failures, unsupported documents and technical/image-processing failures. Unknown reason codes must never create an approval. Raw provider messages and image URLs must not be exposed automatically.
 
+## Result-retrieval reference supplied by the owner
+
+The owner supplied the sandbox URL `https://testapi.smileidentity.com/v3/status/{jobId}`. The path identifier has the exact pattern `^job_[0-9a-hjkmnp-tv-z]{26}$`; the example is `job_01h2xcejqtf2nbrexx3vqjhp41`. The submission acknowledgement parser now validates job references with that pattern. Authentication uses the V3 token described above.
+
+- HTTP `200` means the verification has reached a terminal state: `clear`, `block`, `attention` or `error`. It does not by itself mean the customer passed KYC.
+- HTTP `202` means the verification is still processing.
+- HTTP `400` indicates an invalid job ID; `401` missing/invalid authentication; `403` an IP-allowlist rejection; and `500` an internal provider error. These are not identity decisions.
+- HTTP `404` may mean the job does not exist, belongs to another partner, or belongs to a different token-bound user. It is not proof that an earlier uncertain submission never happened and must not trigger blind resubmission.
+
+The owner then supplied a `JobStatusResponse` description with `status`, `job_id`, `user_id`, `message` and `created_at`. Its status enum is `clear`, `block`, `attention`, `error`, `processing`, or `not_found`, corresponding to HTTP 200/202/404 as above. `created_at` is when the **status response was generated**; it must not be treated as the job creation time, identity-verification time or an immutable decision revision.
+
+The reference separately labels `Headers` with `api_version`, `job_id` and `user_id` (`unknown` when not found), and `Response` with the status description. No actual JSON example has been supplied, so the exact flat/nested wire shape is still unconfirmed. The supplied fields do not include extracted identity data or individual document/face/liveness checks.
+
+The HTTP method/curl example and actual 200/202 JSON examples remain outstanding. Result retrieval and decision parsing are unimplemented pending these contracts and the detailed identity evidence. Do not infer wire structure from the documentation labels, use HTTP success as approval or expose unvalidated provider data to customers.
+
 ## Existing code boundary
 
 `src/providers/smile-id.client.ts` now implements **V3 server token authentication** from the supplied contract, replacing the preliminary V1 signing/web-token/job-status methods. A fresh-image multipart submission transport and 202 tracking parser are now implemented from the supplied body/consent reference. Canonical result retrieval, webhook handling and capture still need their own verified schemas. Do not register an active provider based on token acquisition alone.
@@ -60,7 +75,7 @@ The generic Task 3 backend already supports durable work, independently authenti
 The supplied page links to these current documentation resources:
 
 1. **Perform a Document Verification** — `/api-reference/products/document-verification/perform-a-document-verification.md`: body, consent and acceptance descriptions have been supplied. Still obtain the actual multipart example/object encoding, complete `user_details` schema, image quality/size limits and error/retry semantics. Confirm idempotency and recovery after an uncertain submission.
-2. **Retrieve a Verification Result** — `/api-reference/core-resources/verification-status/retrieve-a-verification-result.md`: lookup identifiers, canonical response schema, extracted name/DOB/country fields, finality and any versioning/reconciliation guarantees.
+2. **Retrieve a Verification Result** — `/api-reference/core-resources/verification-status/retrieve-a-verification-result.md`: the sandbox path, exact job-ID format, token authentication, HTTP outcomes and status field descriptions have been supplied. Still obtain the HTTP method/curl example, actual JSON examples/wire structure, full job/user/product binding, detailed identity evidence such as extracted name/DOB/country fields, and any versioning/reconciliation guarantees.
 3. **Webhook Types — Document Verification** — `/developer-resources/essentials/verification-webhooks/webhook-types/document-verification.md`: event envelope, result payload and job/customer correlation. Also obtain the receive-webhooks authentication/signature documentation before implementing intake.
 4. **Resend Webhook** — `/developer-resources/essentials/verification-webhooks/receive-webhooks/resend-webhook.md`: delivery, replay and retries.
 5. **Verify with Document** — `/id-coverage/verify-with-document.md`: supported documents/checks per launch market and applicable account/sandbox capability.

@@ -364,3 +364,46 @@ test("an unreadable acceptance is unknown and never exposes the response body", 
   );
   assert.equal(docCalls, 1);
 });
+test("submission tracking accepts the documented V3 status job identifier", async () => {
+  const documentedJobId = "job_01h2xcejqtf2nbrexx3vqjhp41";
+  const c = client(async (url) =>
+    String(url).endsWith("/token")
+      ? json({ token })
+      : json(accepted({ job_id: documentedJobId }), 202),
+  );
+  const result = await c.submitDocumentVerification(input());
+  assert.equal(result.jobId, documentedJobId);
+  assert.equal(result.status, "accepted");
+});
+test("invalid TypeIDs never become usable submission job references or trigger replay", async () => {
+  for (const malformedJobId of [
+    "job_123",
+    jobId + "0",
+    jobId.slice(0, -1),
+    jobId.toUpperCase(),
+    jobId.replace("job_", "user_"),
+    "job_" + "i".repeat(26),
+    "job_" + "l".repeat(26),
+    "job_" + "o".repeat(26),
+    "job_" + "u".repeat(26),
+    jobId + "\n",
+    jobId + "\r\n",
+    " " + jobId,
+    jobId + "/../another-job",
+    jobId + "?user_id=another-user",
+  ]) {
+    let docCalls = 0;
+    const c = client(async (url) => {
+      if (String(url).endsWith("/token")) return json({ token });
+      docCalls++;
+      return json(accepted({ job_id: malformedJobId }), 202);
+    });
+    await assert.rejects(
+      c.submitDocumentVerification(input()),
+      (error: unknown) =>
+        isOutcome("unknown")(error) &&
+        (error as SmileIdSubmissionError).providerJobId === undefined,
+    );
+    assert.equal(docCalls, 1);
+  }
+});

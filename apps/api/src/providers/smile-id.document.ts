@@ -162,13 +162,14 @@ export async function prepareSmileIdDocument(input: SmileIdDocumentRequest) {
     );
   }
 }
-const jobIdSchema = z
+// Exact TypeID format supplied by the V3 result-retrieval reference.
+export const smileIdJobIdSchema = z
   .string()
-  .regex(/^job_[a-z0-9]+$/)
-  .max(200);
+  .length(30)
+  .regex(/^job_[0-9a-hjkmnp-tv-z]{26}$/);
 const acceptanceSchema = z.object({
   status: z.literal("accepted"),
-  job_id: jobIdSchema,
+  job_id: smileIdJobIdSchema,
   user_id: z.string().min(1).max(200),
   created_at: z.string().datetime({ offset: true }),
 });
@@ -177,7 +178,7 @@ export function parseSmileIdAcceptance(
   expected: { operationId: string; userId: string },
 ): SmileIdSubmissionAccepted {
   const result = acceptanceSchema.safeParse(data);
-  const job = jobIdSchema.safeParse(data.job_id);
+  const job = smileIdJobIdSchema.safeParse(data.job_id);
   if (!result.success || result.data.user_id !== expected.userId)
     throw new SmileIdSubmissionError(
       "unknown",
