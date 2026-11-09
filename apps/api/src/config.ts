@@ -1,4 +1,9 @@
 import { z } from "zod";
+export const smileIdPartnerIdSchema = z
+  .string()
+  .trim()
+  .max(100)
+  .regex(/^[1-9][0-9]*$/);
 const positive = (fallback: number) =>
   z.coerce.number().int().positive().default(fallback);
 const schema = z.object({
@@ -29,7 +34,7 @@ const schema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   MAIL_FROM: z.string().optional(),
-  SMILE_ID_PARTNER_ID: z.string().trim().min(1).max(100).optional(),
+  SMILE_ID_PARTNER_ID: smileIdPartnerIdSchema.optional(),
   SMILE_ID_API_KEY: z.string().trim().min(1).max(4096).optional(),
   SMILE_ID_MODE: z.enum(["sandbox", "live"]).default("sandbox"),
   REDIS_URL: z

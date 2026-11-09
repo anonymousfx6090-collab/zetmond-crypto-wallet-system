@@ -52,7 +52,7 @@ function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status });
 }
 function client(transport: typeof fetch, mode: "sandbox" | "live" = "sandbox") {
-  return new SmileIdClient({ partnerId: "001", apiKey: key, mode }, transport);
+  return new SmileIdClient({ partnerId: "123", apiKey: key, mode }, transport);
 }
 const isOutcome = (outcome: "not_submitted" | "unknown") => (error: unknown) =>
   error instanceof SmileIdSubmissionError &&
@@ -75,7 +75,7 @@ test("document submission sends native multipart images, consent and stable corr
     assert.equal(options?.credentials, "omit");
     assert.ok(options?.signal);
     const headers = new Headers(options?.headers);
-    assert.equal(headers.get("smileid-partner-id"), "001");
+    assert.equal(headers.get("smileid-partner-id"), "123");
     assert.equal(headers.get("smileid-token"), token);
     assert.equal(headers.get("smileid-api-key"), null);
     assert.equal(headers.get("content-type"), null);
@@ -192,6 +192,8 @@ test("false/incomplete consent, invalid subject data and insecure callbacks are 
     { email: "invalid" },
     { country: "US" },
     { userId: "person@example.test" },
+    { userId: "unknown" },
+    { userId: "customer\n" },
     { callbackUrl: "http://api.example.test/callback" },
     { callbackUrl: "https://user:private-password@api.example.test/callback" },
   ])
@@ -308,28 +310,55 @@ test("a lost upload response is unknown and is never retried automatically", asy
   );
   assert.equal(docCalls, 1);
 });
-test("unexpected HTTP results are held for reconciliation; 401 invalidates only the rejected token", async () => {
+test("unexpected document responses never replay the request or evict an unrelated lookup token", async () => {
   for (const status of [200, 400, 401, 403, 415, 429, 500]) {
     let tokenCalls = 0,
       docCalls = 0;
     const c = client(async (url) => {
       if (String(url).endsWith("/token")) {
         tokenCalls++;
-        return json({ token });
+        return json({ token: token + String(tokenCalls) });
       }
       docCalls++;
       return new Response(key, { status });
     });
+    const cachedLookupToken = await c.getAccessToken();
     await assert.rejects(
       c.submitDocumentVerification(input()),
       isOutcome("unknown"),
     );
     assert.equal(docCalls, 1);
-    assert.equal(tokenCalls, 1);
-    await c.getAccessToken();
-    assert.equal(tokenCalls, status === 401 ? 2 : 1);
+    assert.equal(tokenCalls, 2);
+    assert.equal(await c.getAccessToken(), cachedLookupToken);
+    assert.equal(tokenCalls, 2);
     assert.equal(docCalls, 1);
   }
+});
+test("each new document submission gets its own fresh token without sharing or replacing the lookup cache", async () => {
+  let tokenCalls = 0;
+  const submittedTokens: string[] = [];
+  const c = client(async (url, options) => {
+    if (String(url).endsWith("/token"))
+      return json({ token: token + String(++tokenCalls) });
+    submittedTokens.push(new Headers(options?.headers).get("smileid-token")!);
+    const user = (options?.body as FormData).get("user_id");
+    return json(accepted({ user_id: user }), 202);
+  });
+  const cached = await c.getAccessToken();
+  await Promise.all([
+    c.submitDocumentVerification(input()),
+    c.submitDocumentVerification(
+      input({
+        operationId: "79d95e70-bf87-4e4d-a6a5-4e9c0f69a374",
+        userId: "zetmond_fixture_user_2",
+      }),
+    ),
+  ]);
+  assert.equal(tokenCalls, 3);
+  assert.equal(new Set(submittedTokens).size, 2);
+  assert.ok(submittedTokens.every((value) => value !== cached));
+  assert.equal(await c.getAccessToken(), cached);
+  assert.equal(tokenCalls, 3);
 });
 test("202 acceptance is not approval and must match the supplied subject and valid tracking fields", async () => {
   for (const patch of [

@@ -1,5 +1,5 @@
 import { performance } from "node:perf_hooks";
-import { Config, ConfigurationError } from "../config";
+import { Config, ConfigurationError, smileIdPartnerIdSchema } from "../config";
 import {
   prepareSmileIdDocument,
   parseSmileIdAcceptance,
@@ -24,6 +24,11 @@ import {
   SmileIdReplayAccepted,
   SmileIdReplayError,
 } from "./smile-id.replay";
+import {
+  prepareSmileIdDocumentSession,
+  SmileIdDocumentSessionRequest,
+  SmileIdSessionError,
+} from "./smile-id.session";
 
 const tokenUrls = {
   sandbox: "https://testapi.smileidentity.com/v3/token",
@@ -38,8 +43,9 @@ const responseLimit = 256 * 1024;
 const tokenCacheMs = 14 * 60 * 1000;
 export class SmileIdError extends Error {}
 
-/** Server-only V3 transport. Tokens remain on the server and are never
- * evidence of a customer's identity. No verification adapter is enabled here.
+/** Server-only V3 transport. Cached unscoped tokens remain private; only dedicated
+ * bound session tokens are intended for future browser handoff. Neither token
+ * kind is KYC evidence. No verification adapter or HTTP issuer is enabled here.
  */
 export class SmileIdClient {
   #partnerId: string;
@@ -55,7 +61,12 @@ export class SmileIdClient {
     transport: Transport = fetch,
     now: () => number = () => performance.now(),
   ) {
-    this.#partnerId = credentials.partnerId;
+    const partnerId = smileIdPartnerIdSchema.safeParse(credentials.partnerId);
+    if (!partnerId.success)
+      throw new ConfigurationError(
+        "Smile ID partner ID must be numeric with no leading zeros.",
+      );
+    this.#partnerId = partnerId.data;
     this.#apiKey = credentials.apiKey;
     this.mode = credentials.mode;
     this.#transport = transport;
@@ -94,6 +105,37 @@ export class SmileIdClient {
       "SmileID-Token": await this.getAccessToken(),
     };
   }
+  /** Fresh issuance per document session, never cached or coalesced with lookup
+   * tokens or other customers. Payload bindings are enforced by the vendor, not
+   * browser config. Return only the opaque JWT; no API key or source PII/URL.
+   */
+  async issueDocumentSessionToken(
+    input: SmileIdDocumentSessionRequest,
+  ): Promise<string> {
+    const form = prepareSmileIdDocumentSession(input);
+    const startedAt = this.#now();
+    let token: string;
+    try {
+      token = await this.#issueToken(form);
+    } catch {
+      throw new SmileIdSessionError(
+        "issuance_failed",
+        "Smile ID document session token could not be issued.",
+      );
+    }
+    const completedAt = this.#now();
+    if (
+      !Number.isFinite(startedAt) ||
+      !Number.isFinite(completedAt) ||
+      completedAt < startedAt ||
+      completedAt >= startedAt + tokenCacheMs
+    )
+      throw new SmileIdSessionError(
+        "expired",
+        "Smile ID document session token is no longer fresh; request a new session.",
+      );
+    return token;
+  }
   /** Persists nothing by itself: the adapter must durably record intent before
    * invoking this, save the generated job ID, and reconcile unknown outcomes.
    * Never automatically retries a verification, including after token rejection.
@@ -104,7 +146,11 @@ export class SmileIdClient {
     const prepared = await prepareSmileIdDocument(input);
     let headers: Record<string, string>;
     try {
-      headers = await this.getRequestHeaders();
+      // The authentication reference recommends a fresh token per verification.
+      headers = {
+        "SmileID-Partner-ID": this.#partnerId,
+        "SmileID-Token": await this.#issueToken(),
+      };
     } catch {
       throw new SmileIdSubmissionError(
         "not_submitted",
@@ -343,7 +389,7 @@ export class SmileIdClient {
     this.#cached = undefined;
     this.#pending = undefined;
   }
-  async #issueToken(): Promise<string> {
+  async #issueToken(body?: FormData): Promise<string> {
     let response: Response;
     try {
       response = await this.#transport(tokenUrls[this.mode], {
@@ -356,8 +402,9 @@ export class SmileIdClient {
           Accept: "application/json",
         },
         signal: AbortSignal.timeout(10000),
-        // The documented minimal request has no body and no Content-Type.
-        // Scoped multipart tokens need their own verified schema/cache policy.
+        body,
+        // Bodyless server auth or native multipart session scope; FormData sets
+        // its own boundary. Never send JSON or manually set Content-Type here.
       });
     } catch {
       // Never forward transport errors: they may include request credentials.
@@ -378,6 +425,7 @@ export class SmileIdClient {
     const data = await this.#readResponse(response);
     if (
       typeof data.token !== "string" ||
+      data.token !== data.token.trim() ||
       data.token.length > 16384 ||
       !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(data.token)
     )

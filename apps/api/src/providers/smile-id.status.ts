@@ -1,14 +1,10 @@
 import { z } from "zod";
-import { smileIdJobIdSchema } from "./smile-id.document";
+import { smileIdJobIdSchema, smileIdUserIdSchema } from "./smile-id.document";
 
 const lookupSchema = z
   .object({
     jobId: smileIdJobIdSchema,
-    userId: z
-      .string()
-      .min(1)
-      .max(200)
-      .refine((value) => !/[^A-Za-z0-9_-]/.test(value) && value !== "unknown"),
+    userId: smileIdUserIdSchema,
   })
   .strict();
 export type SmileIdStatusLookup = z.infer<typeof lookupSchema>;

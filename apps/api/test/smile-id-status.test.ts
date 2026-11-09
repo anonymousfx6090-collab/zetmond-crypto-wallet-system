@@ -23,7 +23,7 @@ const status = (patch: Record<string, unknown> = {}) => ({
 const json = (data: unknown, httpStatus = 200) =>
   new Response(JSON.stringify(data), { status: httpStatus });
 function client(transport: typeof fetch, mode: "sandbox" | "live" = "sandbox") {
-  return new SmileIdClient({ partnerId: "001", apiKey: key, mode }, transport);
+  return new SmileIdClient({ partnerId: "123", apiKey: key, mode }, transport);
 }
 const isError =
   (code: SmileIdStatusError["code"], httpStatus?: number) => (error: unknown) =>
@@ -51,7 +51,7 @@ test("status lookup uses the documented GET path and flat processing response, e
     assert.equal(options?.credentials, "omit");
     assert.ok(options?.signal);
     const headers = new Headers(options?.headers);
-    assert.equal(headers.get("smileid-partner-id"), "001");
+    assert.equal(headers.get("smileid-partner-id"), "123");
     assert.equal(headers.get("smileid-token"), token);
     assert.equal(headers.get("smileid-api-key"), null);
     assert.equal(headers.get("accept"), "application/json");

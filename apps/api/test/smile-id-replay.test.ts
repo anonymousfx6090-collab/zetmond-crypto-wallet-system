@@ -27,7 +27,7 @@ const accepted = (patch: Record<string, unknown> = {}) => ({
   ...patch,
 });
 function client(transport: typeof fetch, mode: "sandbox" | "live" = "sandbox") {
-  return new SmileIdClient({ partnerId: "001", apiKey: key, mode }, transport);
+  return new SmileIdClient({ partnerId: "123", apiKey: key, mode }, transport);
 }
 function isError(
   outcome: SmileIdReplayError["outcome"],
@@ -68,7 +68,7 @@ test("replay confirms terminal status then makes one bodyless POST using the sto
     assert.equal(options?.credentials, "omit");
     assert.ok(options?.signal);
     const headers = new Headers(options?.headers);
-    assert.equal(headers.get("smileid-partner-id"), "001");
+    assert.equal(headers.get("smileid-partner-id"), "123");
     assert.equal(headers.get("smileid-token"), token);
     assert.equal(headers.get("smileid-api-key"), null);
     assert.equal(headers.get("content-type"), null);

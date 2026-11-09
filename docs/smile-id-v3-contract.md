@@ -20,11 +20,15 @@ The owner also supplied these required headers from the V3 verification referenc
 The owner subsequently supplied the token contract:
 
 - `POST https://testapi.smileidentity.com/v3/token` for sandbox, and `POST https://api.smileidentity.com/v3/token` for production.
-- Required `SmileID-Partner-ID` and `SmileID-API-Key` headers. The documented minimal curl request is bodyless, with `Accept: application/json`.
-- A body is optional. If sent, it must be `multipart/form-data`; JSON may return `415`. Supported optional fields include `user_id`, `partner_params`, `product`, `use_enrolled_image` and `payload`; exact value/serialization contracts remain unprovided.
+- Required `SmileID-Partner-ID` and `SmileID-API-Key` headers. The Partner ID must be numeric without leading zeros. The documented minimal curl request is bodyless, with `Accept: application/json`.
+- A body is optional. If sent, it must be `multipart/form-data`; JSON may return `415`. The owner supplied the full OpenAPI definition of `user_id`, string-valued `partner_params`, product enum, enrolled-image/re-enrolment grants and nested `payload`; the [public snapshot](contracts/smile-id-v3-token.openapi.json) preserves it without the surrounding documentation instructions.
 - Success: HTTP `200`, `{ "token": "<JWT>" }`. Lifetime: 15 minutes. Tokens are environment-specific and go in `SmileID-Token` on subsequent requests with the partner ID.
 
-The server client now implements the documented bodyless authentication request and token lifecycle. Scoped multipart/browser tokens are not implemented by this helper. No real credential/token was provided in chat, and fixture tests do not prove live authentication.
+The authentication overview recommends a fresh token per verification. The client now requests fresh tokens for new document submissions and separately for `issueDocumentSessionToken()`. Only server lookup/replay tokens are cached. Dedicated document-session issuance is multipart, uncached and never coalesced across customers; it does not fall back to the server cache. No real credential/token was provided in chat, and fixture tests do not prove live authentication.
+
+The session issuer fixes product to `document_verification`, binds user/operation references and supplies country, verified email and HTTPS callback in `payload`, with optional consumer-stated names, ID type and genuine consent. The token contract says payload fields override matching downstream browser fields; PII becomes `pii_` references and callback URL a `callback_` reference in the JWT. Grants to use an enrolled selfie or replace one default false and are not accepted by the local issuer. A full optional consent object is required when supplied, and consent more than one minute in the future is rejected. Local notice policy retains HTTPS and uppercase language, a stricter subset of the Token API's HTTP/HTTPS and case-insensitive language support.
+
+The helper returns only the credential JWT, never the API key or source payload. It adds no browser HTTP issuer, persisted session lifecycle, SDK script or active adapter. The future endpoint must derive every scope from an authenticated current attempt and enforce ownership, eligibility, CSRF, rate/lease/duplicate limits and private callback association before exposing a session. Native FormData uses JSON text for structured parts; vendor SDK/sandbox confirmation of encoding, actual field enforcement and duplicate behavior remains required.
 
 ## Submission and consent supplied by the owner
 
@@ -112,7 +116,7 @@ The future adapter must persist/rate-limit replay intents and reconcile uncertai
 
 ## Existing code boundary
 
-`src/providers/smile-id.client.ts` now implements **V3 server token authentication** from the supplied contract, replacing the preliminary V1 signing/web-token/job-status methods. Fresh-image multipart submission, acceptance tracking, bound job-status retrieval, a timestamp-HMAC notification check and guarded callback replay are implemented from the supplied references. Detailed webhook fields and delivery rules are recorded; trustworthy result processing/recovery and browser capture integration remain outstanding. Do not register an active provider based on token acquisition, terminal status or the notification proof alone.
+`src/providers/smile-id.client.ts` now implements **V3 server token authentication** from the supplied contract, replacing the preliminary V1 signing/web-token/job-status methods. Fresh document/session token issuance, multipart submission, acceptance tracking, bound job-status retrieval, a timestamp-HMAC notification check and guarded callback replay are implemented from the supplied references. Detailed webhook fields, delivery rules and SDK result union are recorded; trustworthy result processing/recovery and browser capture integration remain outstanding. Do not register an active provider based on token acquisition, terminal status or the notification proof alone.
 
 The generic Task 3 backend already supports durable work, independently authenticated provider callbacks, canonical reconciliation, owner protection, case history and eligibility checks. These remain integration points; no Smile ID adapter is active. Storing Render credentials does not establish authentication or completed KYC.
 
@@ -126,6 +130,6 @@ The supplied page links to these current documentation resources:
 4. **Resend Webhook** — `/developer-resources/essentials/verification-webhooks/receive-webhooks/resend-webhook.md` and linked **Replay a Verification Webhook** at `/api-reference/core-resources/replay-webhook/replay-a-verification-webhook.md`: supplied and implemented as guarded bodyless replay. Timestamp/key behavior on retries/resend and full-result recovery remain outstanding.
 5. **Verify with Document** — `/id-coverage/verify-with-document.md`: supported documents/checks per launch market and applicable account/sandbox capability.
 
-The owner supplied the current index and V12 hosted-web setup/verification pages, confirming a supported document/selfie/liveness modal. See the [hosted web contract](smile-id-web-sdk-contract.md) for script URL, exact product alias, branding, consent/user-details fields and current references. Fresh scoped token issuance, exact result callbacks, application integration and actual sandbox evidence remain outstanding; the cached unscoped server token must not be sent to browsers.
+The owner supplied the current index, V12 hosted-web setup/verification/result pages and full token schema. See the [hosted web contract](smile-id-web-sdk-contract.md) for script URL, exact product alias, branding, consent/user-details and result-union rules. Fresh bound token transport is implemented; its authenticated endpoint, persisted session/callback association, SDK integration and actual sandbox evidence remain outstanding. The cached unscoped server token must not be sent to browsers.
 
 Bank-verification selection, Redis/worker hosting and actual provider-backed sandbox journeys remain outstanding. Staging financial access stays disabled.

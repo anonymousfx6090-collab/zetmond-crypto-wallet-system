@@ -7,7 +7,7 @@ export const documentTransportLimits = {
   totalImageBytes: 40 * 1024 * 1024,
   metadataBytes: 16 * 1024,
 } as const;
-const httpsUrl = z
+export const smileIdHttpsUrlSchema = z
   .string()
   .max(2048)
   .url()
@@ -19,6 +19,11 @@ const httpsUrl = z
       return false;
     }
   });
+export const smileIdUserIdSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .refine((value) => !/[^A-Za-z0-9_-]/.test(value) && value !== "unknown");
 export const smileIdConsentSchema = z
   .object({
     granted: z.literal(true),
@@ -27,16 +32,16 @@ export const smileIdConsentSchema = z
       .string()
       .length(2)
       .regex(/^[A-Z]{2}$/),
-    notice_privacy_policy_url: httpsUrl,
+    notice_privacy_policy_url: smileIdHttpsUrlSchema,
   })
   .strict();
 const requestSchema = z
   .object({
     operationId: z.string().uuid(),
-    userId: z.string().regex(/^[A-Za-z0-9_-]{1,200}$/),
+    userId: smileIdUserIdSchema,
     email: z.string().email().max(254),
     country: z.enum(["NG", "GH", "ZA", "KE"]),
-    callbackUrl: httpsUrl,
+    callbackUrl: smileIdHttpsUrlSchema,
     consent: smileIdConsentSchema,
     document: z.instanceof(Blob),
     documentBack: z.instanceof(Blob).optional(),

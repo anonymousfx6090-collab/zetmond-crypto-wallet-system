@@ -8,7 +8,7 @@ import {
 } from "../src/providers/smile-id.client";
 import { checkSmileIdCredentials } from "../src/check-smile-id";
 const credentials = {
-  partnerId: "001",
+  partnerId: "123",
   apiKey: "fixture-api-key",
   mode: "sandbox" as const,
 };
@@ -39,7 +39,7 @@ test("V3 token request matches the supplied bodyless curl contract and fixes ori
     assert.equal(options?.credentials, "omit");
     assert.ok(options?.signal);
     const headers = new Headers(options?.headers);
-    assert.equal(headers.get("smileid-partner-id"), "001");
+    assert.equal(headers.get("smileid-partner-id"), "123");
     assert.equal(headers.get("smileid-api-key"), credentials.apiKey);
     assert.equal(headers.get("accept"), "application/json");
     assert.equal(headers.get("content-type"), null);
@@ -52,7 +52,7 @@ test("verification headers contain the access token and partner ID, without forw
   const c = client(async () => response());
   const headers = await c.getRequestHeaders();
   assert.deepEqual(headers, {
-    "SmileID-Partner-ID": "001",
+    "SmileID-Partner-ID": "123",
     "SmileID-Token": jwt(),
   });
   assert.ok(!JSON.stringify(headers).includes(credentials.apiKey));
@@ -246,6 +246,8 @@ test("malformed token responses never become authorization headers", async () =>
     { token: "" },
     { token: "not-a-jwt" },
     { token: "a.b.c\r\ninjected:value" },
+    { token: jwt() + "\n" },
+    { token: " " + jwt() },
     { token: "a".repeat(16385) + ".b.c" },
   ]) {
     const c = client(async () => new Response(JSON.stringify(data)));
@@ -299,13 +301,13 @@ test("Smile ID settings stay optional and partial credentials cannot construct a
   assert.throws(
     () =>
       configuredSmileIdClient(
-        loadConfig({ ...fixtureConfig, SMILE_ID_PARTNER_ID: "001" }),
+        loadConfig({ ...fixtureConfig, SMILE_ID_PARTNER_ID: "123" }),
       ),
     ConfigurationError,
   );
   const config = loadConfig({
     ...fixtureConfig,
-    SMILE_ID_PARTNER_ID: "001",
+    SMILE_ID_PARTNER_ID: "123",
     SMILE_ID_API_KEY: credentials.apiKey,
   });
   assert.equal(configuredSmileIdClient(config)?.mode, "sandbox");
@@ -316,6 +318,35 @@ test("Smile ID settings stay optional and partial credentials cannot construct a
       error.message.includes("SMILE_ID_MODE") &&
       !error.message.includes("private-value"),
   );
+});
+test("partner IDs must be numeric without leading zeros in configuration and direct clients", () => {
+  for (const value of [
+    "0",
+    "00",
+    "001",
+    "-1",
+    "1.2",
+    "12x",
+    "１２３",
+    "1\n2",
+  ]) {
+    assert.throws(
+      () => loadConfig({ ...fixtureConfig, SMILE_ID_PARTNER_ID: value }),
+      (error: unknown) =>
+        error instanceof ConfigurationError &&
+        error.message.includes("SMILE_ID_PARTNER_ID") &&
+        !error.message.includes(value),
+    );
+    assert.throws(
+      () => new SmileIdClient({ ...credentials, partnerId: value }),
+      ConfigurationError,
+    );
+  }
+  const normalized = loadConfig({
+    ...fixtureConfig,
+    SMILE_ID_PARTNER_ID: " 123 ",
+  });
+  assert.equal(normalized.SMILE_ID_PARTNER_ID, "123");
 });
 test("hosted staging and production client modes remain separate", () => {
   const hosted = {
@@ -329,7 +360,7 @@ test("hosted staging and production client modes remain separate", () => {
     TERMS_VERSION: "fixture-v1",
     TERMS_URL: "https://app.example.test/terms",
     PRIVACY_URL: "https://app.example.test/privacy",
-    SMILE_ID_PARTNER_ID: "001",
+    SMILE_ID_PARTNER_ID: "123",
     SMILE_ID_API_KEY: credentials.apiKey,
   };
   assert.equal(
@@ -372,7 +403,7 @@ test("hosted staging and production client modes remain separate", () => {
 test("operator credential check returns only authentication status and mode", async () => {
   const config = loadConfig({
     ...fixtureConfig,
-    SMILE_ID_PARTNER_ID: "001",
+    SMILE_ID_PARTNER_ID: "123",
     SMILE_ID_API_KEY: credentials.apiKey,
   });
   const result = await checkSmileIdCredentials(config, async () => response());
@@ -388,7 +419,7 @@ test("operator credential check fails safely for missing or rejected credentials
   );
   const config = loadConfig({
     ...fixtureConfig,
-    SMILE_ID_PARTNER_ID: "001",
+    SMILE_ID_PARTNER_ID: "123",
     SMILE_ID_API_KEY: credentials.apiKey,
   });
   await assert.rejects(

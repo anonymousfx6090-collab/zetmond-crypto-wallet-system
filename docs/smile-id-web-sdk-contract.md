@@ -1,12 +1,12 @@
 # Smile ID V12 hosted web contract
 
-Source: the owner supplied the current documentation index, hosted **Setup** and **Performing a Verification** pages on 9 November 2026. These are documentation contracts, not evidence of a successful browser/sandbox integration. No SDK script, browser token endpoint or active capture adapter is enabled by this document.
+Source: the owner supplied the current documentation index, hosted **Setup**, **Performing a Verification**, **Getting Result of a Verification**, and Token API Reference on 9 November 2026. These are documentation contracts, not evidence of a successful browser/sandbox integration. No SDK script, browser token endpoint or active capture adapter is enabled by this document.
 
 ## Script and initialization
 
 - The hosted embed is installed only by a script tag, not npm: `https://cdn.usesmileid.com/inline/v12/js/script.min.js`. The `v12` URL floats on the latest V12 release.
 - It exposes `window.SmileIdentity(config)` and opens a hosted modal. HTTPS or localhost is required for camera access; an enclosing iframe must allow the camera.
-- Each verification session needs a fresh backend-minted V3 token. The existing cached, unscoped server token must remain private; it is not a browser session token issuer.
+- Each verification session needs a fresh backend-minted V3 token. `issueDocumentSessionToken()` now implements dedicated multipart issuance; the existing cached, unscoped server token stays private. No browser HTTP issuer is active yet.
 - The required `partner_details` object has all five fields: `partner_id`, `name`, `logo_url`, `policy_url`, `theme_color`. The notice uses the configured name/logo/policy; documentation placeholders are not Zetmond's actual notice or branding.
 - SDK environment is `sandbox` or `production`, corresponding to the server client's `sandbox` or `live` mode. Do not forward the server's literal `live` value to this SDK.
 
@@ -24,7 +24,7 @@ Supported common config includes `token`, `callback_url`, `environment`, `partne
 
 ## User details and consent
 
-If SDK `user_details` is supplied, it must contain `given_names`, `last_name` and at least one of `email`/E.164 `phone_number`. Supplying only an email as the config object fails initialization. Omitting the object lets the flow collect it. Fields bound into the token are removed from the form individually, so the backend may be able to bind verified email while the SDK collects remaining names; exact token payload definitions are still needed.
+If SDK `user_details` is supplied, it must contain `given_names`, `last_name` and at least one of `email`/E.164 `phone_number`. Supplying only an email as the config object fails initialization. Omitting the object lets the flow collect it. Fields bound into the token are removed from the form individually. The supplied token schema confirms separate optional `payload.email`, `given_names` and `last_name`, allowing verified email binding while the SDK collects remaining names.
 
 These SDK requirements do not by themselves establish the full REST `user_details` schema. The preliminary fresh-image server transport's email-only path still needs validation against that REST schema before use. Consumer-stated names/contact details must not replace extracted identity evidence. Zetmond remains email-only for account verification; an SDK phone field would not prove phone ownership or enable SMS.
 
@@ -34,12 +34,30 @@ Omitting pre-obtained consent shows the SDK consent screen. Token-bound consent 
 
 ## Result handling and remaining implementation
 
-`onResult` is preferred over deprecated `onSuccess`, `onClose` and `onError`. Known states are `success`, `failure` and `cancelled`. Success indicates submission/202 acceptance, not a KYC verdict; it must show pending status while the server verifies the result. Exact callback payload and error schemas are in the result page listed below and remain to obtain.
+`onResult` is preferred over deprecated `onSuccess`, `onClose` and `onError`. The supplied result page defines:
+
+- `success`: `result.value` is the API's verbatim 202 response with `job_id`, `user_id`, `status`, `message`, `created_at`. The envelope `result.status` is `success`, distinct from the nested submission status. Show pending, never approval.
+- `failure`: `result.error` has `error_code`, `message`, `status`, `retryable`. Known codes are `CONFIG_INVALID`, `SESSION_INIT_FAILED`, `CONSENT_DENIED`, `SUBMISSION_FAILED`, `NOT_PERMITTED`, `DOCUMENTS_REJECTED`. Use a safe local message map; raw vendor messages are not automatically suitable for customers or logs. Respect denied consent; do not auto-retry. An SDK retry suggestion does not authorize another potentially duplicated verification without server reconciliation.
+- `cancelled`: the user closed the UI; no error payload. `product` is carried by every state, except it may be undefined if cancellation preceded product selection.
+
+The SDK says one result fires per flow. Implement application lifecycle protection as well: a stale or repeated callback from an older launch must not replace the current attempt. Submission IDs from the browser are untrusted hints until the backend binds them to the stored operation and vendor result. No callback can grant KYC access.
+
+The result overview calls job/user IDs server-generated, while the normative Token API explicitly supports a partner-provided `user_id`. Preserve the token-bound expected user and verify actual SDK/API behavior in sandbox; do not silently accept an arbitrary different user ID. Correlation should use a unique operation reference in server-bound `partner_params` and an independently protected callback association, not browser metadata alone.
+
+## Token bindings now documented
+
+The supplied [Token API OpenAPI snapshot](contracts/smile-id-v3-token.openapi.json) requires a numeric Partner ID without leading zeros. Token bodies are optional multipart; structured `partner_params` is a string-valued record and `payload` carries identity/consent fields. The client sends the canonical token product `document_verification`, subject ID and `zetmond_operation_id`; payload binds launch country, verified email, HTTPS callback and optional names/ID type/genuine consent. No enrolled-image or re-enrolment grant is accepted by this issuer.
+
+The API describes server-side replacement of downstream fields by token-bound values. Raw `id_number`, names, email and phone are replaced with opaque `pii_` references in the JWT; callback URL becomes a `callback_` reference. Country, ID type and consent remain clear. This is a vendor contract, not proof from a real token; opaque tokens remain credentials and must not be logged or persisted in browser storage.
+
+The issuer returns only the JWT, never the API key or source payload. It does not cache/coalesce requests or fall back to the cached server token on failure. It rejects invalid scopes and too-future consent; local policy retains uppercase notice language and HTTPS notice/callback URLs, a stricter subset of the token API's case-insensitive language and HTTP/HTTPS notice support. Token issuance does not prove identity or reserve a vendor job. Multipart object encoding, bound-field enforcement, callback-reference confidentiality, ID correlation and token-reuse/duplicate behavior still require real SDK/sandbox validation.
+
+The opaque callback reference may support a server-owned per-operation callback capability without putting its raw URL into browser config/JWT. Design and verify that additional request binding before trusting detailed callback evidence; the timestamp HMAC alone still does not sign the JSON body. No capability route is implemented yet.
 
 Before activation:
 
-- Implement fresh, authenticated, operation-bound browser token issuance from the actual `/v3/token` multipart/payload schema. Preserve normal session, role, email verification, current-attempt, rate/duplicate and CSRF checks; the documentation's generic GET `/sessions/new` is an example, not Zetmond's API design.
-- Establish vendor token/user/product/country/callback binding and duplicate-submission/recovery semantics. Browser config/metadata alone cannot enforce these.
+- Connect the implemented token transport to an authenticated, persisted current attempt. Enforce ownership, role, email verification, rate/lease/duplicate and CSRF checks; the documentation's generic GET `/sessions/new` is an example, not Zetmond's API design.
+- Validate vendor token/user/product/country/callback binding and duplicate-submission/recovery semantics in sandbox. Browser config/metadata alone cannot enforce these.
 - Integrate SDK lifecycle and safe result/error handling with the existing persisted attempts. Add the required script/frame/connect origins and route-specific camera permissions after confirming the actual hosted origins; do not relax all customer routes.
 - Implement trustworthy detailed-result intake, current-operation binding, country/age/document/fraud checks and recovery before registering the provider. Keep staging financial access disabled.
 - Exercise actual account-backed sandbox capture and callbacks, separately from mocked browser tests. Confirm enabled markets/documents and applicable SDK/account configuration.
@@ -48,9 +66,10 @@ Before activation:
 
 - [Hosted setup](https://docs.usesmileid.com/developer-resources/sdks/web/web-sdk/setup.md) — supplied.
 - [Performing a verification](https://docs.usesmileid.com/developer-resources/sdks/web/web-sdk/performing-a-verification.md) — supplied.
-- [Getting result of a verification](https://docs.usesmileid.com/developer-resources/sdks/web/web-sdk/getting-result-of-a-verification.md) — exact `onResult` payload/error union and final-verdict handling.
+- [Getting result of a verification](https://docs.usesmileid.com/developer-resources/sdks/web/web-sdk/getting-result-of-a-verification.md) — supplied; result/error union and submission-only semantics recorded above.
 - [Theming](https://docs.usesmileid.com/developer-resources/sdks/web/web-sdk/theming-and-customization.md) — brand/localization and supported options.
-- [Authentication](https://docs.usesmileid.com/api-reference/authentication.md) — complete token request/payload/scoping contract.
+- [Authentication](https://docs.usesmileid.com/api-reference/authentication.md) — supplied overview; 15-minute lifetime, headers and fresh-token recommendation.
+- [Token API Reference](https://docs.usesmileid.com/api-reference/set-up/access.md) — supplied full multipart/payload schema, saved in the OpenAPI snapshot above.
 - [Configure your webhook server](https://docs.usesmileid.com/developer-resources/essentials/verification-webhooks/receive-webhooks/configure-your-webhook-server.md) — hosting and any additional callback authentication configuration.
 - [Web components](https://docs.usesmileid.com/developer-resources/sdks/web/web-components.md) and [submitting payloads](https://docs.usesmileid.com/developer-resources/sdks/web/web-components/submitting-payloads.md) — separately documented composable capture alternative; not implemented.
 

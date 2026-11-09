@@ -9,12 +9,12 @@ import {
 } from "../src/providers/smile-id.webhook";
 
 const key = "fixture-webhook-api-key";
-const partnerId = "001";
+const partnerId = "123";
 const timestamp = "2026-11-09T12:00:00.000Z";
 const nowMillis = Date.parse(timestamp) + 60000;
 // Independently calculated with Python's hmac/hashlib/base64 from the supplied
 // V3 formula, using only these fixture credentials.
-const signature = "+UKN79uQR63V5QFlROflamkjzTzLPr2Ikwq6I8VADIU=";
+const signature = "/fkIva8ZLynIpTOGTQA3bHsIqMcsFgjhbRB9GF+94CU=";
 const stored = {
   jobId: "job_01h2xcejqtf2nbrexx3vqjhp41",
   userId: "user_01h8x9y2z3a4b5c6d7e8f9g0h1",
@@ -77,7 +77,13 @@ test("forged, unpadded, noncanonical and malformed Base64 signatures are rejecte
   for (const invalid of [
     "0".repeat(43) + "=",
     signature.slice(0, -1),
-    signature.slice(0, -2) + "V=", // Same decoded bytes, invalid padding bits.
+    signature.slice(0, -2) +
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"[
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".indexOf(
+          signature.at(-2)!,
+        ) + 1
+      ] +
+      "=", // Same decoded bytes, invalid padding bits.
     "a".repeat(64),
     signature + "\n",
     " " + signature,
@@ -97,7 +103,7 @@ test("forged, unpadded, noncanonical and malformed Base64 signatures are rejecte
 test("proof requires the original literal API key and partner ID", () => {
   for (const c of [
     client("different-key"),
-    client(key, "002"),
+    client(key, "124"),
     client(Buffer.from(key).toString("base64")),
   ])
     assert.throws(

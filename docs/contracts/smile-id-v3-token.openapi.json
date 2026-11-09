@@ -1,0 +1,253 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "v3 Authentication Token API",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "name": "Authentication"
+    }
+  ],
+  "servers": [
+    {
+      "url": "https://testapi.smileidentity.com",
+      "description": "Sandbox"
+    },
+    {
+      "url": "https://api.smileidentity.com",
+      "description": "Production"
+    }
+  ],
+  "paths": {
+    "/v3/token": {
+      "post": {
+        "operationId": "getV3Token",
+        "tags": ["Authentication"],
+        "summary": "Generate v3 Auth Token",
+        "description": "Issues a short-lived JWT for authenticating subsequent v3 API requests.",
+        "parameters": [
+          {
+            "name": "smileid-partner-id",
+            "in": "header",
+            "required": true,
+            "description": "Your unique partner identifier. Must be numeric with no leading zeros.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9]\\d*$"
+            }
+          },
+          {
+            "name": "smileid-api-key",
+            "in": "header",
+            "required": true,
+            "description": "Your partner API key for authentication.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Optional parameters to be included in the generated token.",
+          "required": false,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user_id": {
+                    "type": "string",
+                    "description": "Optional partner-provided user identifier. Required when use_enrolled_image or allow_new_enroll is true."
+                  },
+                  "partner_params": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Key-value metadata for partner reference."
+                  },
+                  "product": {
+                    "type": "string",
+                    "description": "The product or service the token will be used for.",
+                    "enum": [
+                      "aml",
+                      "basic_kyc",
+                      "one_time_aml",
+                      "biometric_kyc",
+                      "address_verification",
+                      "document_verification",
+                      "enhanced_document_verification",
+                      "enhanced_kyc",
+                      "phone_number_verification",
+                      "smart_selfie_authentication",
+                      "smart_selfie_registration",
+                      "smart_selfie_compare"
+                    ]
+                  },
+                  "use_enrolled_image": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Grants the session a job that verifies against the user's enrolled selfie instead of a fresh capture. On Biometric KYC, selfie_image and liveness_images may be omitted. On Document Verification (standard, enhanced and residency), the document is compared against the enrolled selfie: selfie_image is ignored if sent, and liveness_images may be omitted or sent to be checked against the enrolled selfie. Requires user_id; a Document Verification job for a user with no enrolled selfie ends with status error and reason no_enrolled_user_found or no_enrolled_photo. Only this request can grant it, because only it is authenticated with the partner's API key — a value sent on the job itself is discarded. Applies to Biometric KYC and Document Verification only. Cannot be true together with allow_new_enroll."
+                  },
+                  "allow_new_enroll": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Grants the session's job permission to re-enrol the user: when the job passes, its selfie replaces the user's enrolled selfie. Requires user_id, and the user must already be enrolled with a selfie on file: otherwise the job ends with status error and reason no_enrolled_user_found or no_enrolled_photo. Only true has an effect. Only this request can grant it — a value sent on the job itself is discarded. Without it, an enrolled user's selfie is never replaced. Applies to SmartSelfie Registration, SmartSelfie Compare, Biometric KYC, Document Verification and Residency Document Verification. Cannot be true together with use_enrolled_image: a request with both is rejected with 400."
+                  },
+                  "payload": {
+                    "type": "object",
+                    "description": "Optional identity and consent fields to bind into the token. PII fields (id_number, given_names, last_name, email, phone_number) are validated, then replaced with opaque `pii_`-prefixed references — the issued JWT never carries raw PII. country, id_type and the consent fields stay in the clear, and callback_url is replaced by a resolvable `callback_`-prefixed id. Downstream v3 endpoints inject these fields server-side, overriding any matching fields in the request body, so data bound to the token cannot be altered by the client. Fields provided here make the corresponding request body fields optional on downstream endpoints; GET /v3/services/config lists them as `token_provided_fields`. Consent takes the same nested object the v3 entry endpoints accept, and all four of its fields are required when you send it — an incomplete consent object is rejected with 400 naming the field that is missing.",
+                    "properties": {
+                      "country": {
+                        "type": "string",
+                        "description": "Country code or name. Accepts ISO 3166-1 alpha-2 codes (e.g. \"NG\") or full country names (e.g. \"Nigeria\"). Normalized to uppercase ISO 3166-1 alpha-2 on the server. If id_type is also provided, the country/id_type combination is validated."
+                      },
+                      "id_type": {
+                        "type": "string",
+                        "description": "ID document type (e.g., NIN, BVN, DRIVERS_LICENSE). If country is also provided, the combination is validated against known ID types."
+                      },
+                      "id_number": {
+                        "type": "string",
+                        "description": "ID document number. If country and id_type are also provided, the format is validated against the expected regex pattern."
+                      },
+                      "given_names": {
+                        "type": "string",
+                        "description": "Given name(s) / first name of the individual."
+                      },
+                      "last_name": {
+                        "type": "string",
+                        "description": "Last name / surname of the individual."
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email",
+                        "description": "Email address of the individual."
+                      },
+                      "phone_number": {
+                        "type": "string",
+                        "description": "Contact phone number of the individual, in E.164 format. It binds `user_details.phone_number`, so for phone number verification it is the contact number, never the number checked."
+                      },
+                      "callback_url": {
+                        "type": "string",
+                        "description": "URL to receive the async result callback, or a `callback_`-prefixed id from a previously issued token. Overrides the callback_url in the request body of downstream endpoints."
+                      },
+                      "consent": {
+                        "type": "object",
+                        "description": "ISO 27560 consent record, in the same shape the v3 entry endpoints accept. Optional as a whole; when present, all four fields are required and no other field is allowed. Injected as `consent` on downstream endpoints, so a request that carries it need not repeat consent in the body.",
+                        "required": [
+                          "granted",
+                          "granted_at",
+                          "notice_language",
+                          "notice_privacy_policy_url"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                          "granted": {
+                            "type": "boolean",
+                            "description": "Whether the end user granted consent. Must be `true`; any other value is rejected.",
+                            "enum": [true]
+                          },
+                          "granted_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "When consent was granted, as an ISO 8601 timestamp. Must not be more than a minute in the future, so a value stamped from your own clock is fine. Include the timezone — without one the value is read as UTC."
+                          },
+                          "notice_language": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z]{2}$",
+                            "description": "Two-letter ISO 639-1 code for the language the privacy notice was shown in. Normalised to uppercase."
+                          },
+                          "notice_privacy_policy_url": {
+                            "type": "string",
+                            "format": "uri",
+                            "description": "URL of the privacy notice the end user was shown. Must use the http or https scheme."
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "JWT token for authenticating subsequent v3 API requests."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type — request body, if provided, must be multipart/form-data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiErrorResponse": {
+        "type": "object",
+        "required": ["status", "message"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "HTTP status text."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message."
+          }
+        }
+      }
+    }
+  }
+}
