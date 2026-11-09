@@ -10,6 +10,15 @@ Source: the owner supplied the text of Smile ID's current **Document Verificatio
 - Final results arrive through a webhook. Canonical result retrieval reports `processing` while work is outstanding. Webhook replay is supported, but its exact authentication/retry contract is in separate documentation.
 - `status`, `message` and `reason` describe the outcome. Extracted `id_fields` vary with document/country. Image links can be sensitive and are not needed in ordinary customer responses.
 
+The owner also supplied these required headers from the V3 verification reference:
+
+| Header | Documented value |
+| --- | --- |
+| `SmileID-Partner-ID` | The partner identifier. |
+| `SmileID-Token` | An access token returned by `/v3/token`. |
+
+This establishes token-based authentication for the verification request. It does not establish how `/v3/token` authenticates, its HTTP method/body, token expiry/refresh rules or environment URLs. The Render API key must not simply be substituted for `SmileID-Token`. Obtain the token endpoint's full request/response documentation before implementing V3 authentication; no real credential or token value was supplied in chat.
+
 | Vendor disposition | Required Zetmond handling |
 | --- | --- |
 | `clear` | Consider approval only after the authenticated result is bound to the current operation and required identity evidence, country and minimum age are validated. A status string alone is insufficient. |
