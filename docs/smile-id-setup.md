@@ -1,6 +1,6 @@
 # Smile ID setup for Task 3
 
-Updated 9 November 2026. The owner selected Smile ID for KYC, obtained sandbox credentials and reported saving them in Render. The owner last confirmed that the API health check returned staging. **The code now implements V3 token authentication, fresh-image document submission and job-status retrieval; no Smile ID verification adapter is active and Task 3 is not complete.** Bank verification remains a separate integration decision.
+Updated 9 November 2026. The owner selected Smile ID for KYC, obtained sandbox credentials and reported saving them in Render. The owner last confirmed that the API health check returned staging. **The code now implements V3 token authentication, fresh-image document submission, job-status retrieval, notification proof and callback replay; no Smile ID verification adapter is active and Task 3 is not complete.** Bank verification remains a separate integration decision.
 
 ## Render credential settings
 
@@ -79,12 +79,24 @@ The formula does not cover the JSON body, job/user IDs or mode. It must not auth
 
 Validation: **54 targeted checks and the isolated API TypeScript build passed** (17 authentication/client, 15 document submission, 12 status retrieval and 10 webhook proof). A fixture independently calculated with Python verifies the exact HMAC formula. The checks also cover unsafe encodings, wrong keys/partner, timestamp boundaries, case/duplicate headers, reference mismatch, deterministic deduplication and the formula's lack of job/mode binding. No live Smile ID callback was exercised; private environment files remain excluded.
 
+## Callback replay
+
+`replayVerificationWebhook({ jobId, userId })` first obtains current, matching job status and permits only terminal jobs. It then sends one bodyless `POST /v3/replay/{job_id}` using the stored callback URL. The client accepts no callback override and sends no JSON body/Content-Type. Only a bound, valid 202 acknowledgement is returned; this means queued delivery, not a received callback or KYC approval.
+
+`SmileIdReplayError` distinguishes `not_queued` for this request from `unknown`. Documented client rejections/409 are not queued; uncertain dispatch/server responses or malformed acknowledgement require reconciliation before another replay POST. Errors do not create/restart verification. A 401 invalidates only the rejected token without automatic resend. The future adapter must durably record/deduplicate/rate-limit replay intents; no HTTP replay route or worker is active.
+
+Validation: **67 targeted checks and the isolated API TypeScript build passed** (17 authentication/client, 15 document submission, 12 status retrieval, 10 webhook proof and 13 replay). The new checks cover the exact bodyless API contract, terminal preflight, owner/job binding, 409/error handling, uncertain outcomes, token invalidation/refresh and bounded responses. All provider responses are fixtures; no live replay was requested.
+
+## Hosted web contract received
+
+The owner supplied the current V12 hosted setup and verification configuration. The [hosted web contract](smile-id-web-sdk-contract.md) records the CDN script, `doc_verification` SDK product alias, required branding, user-details/consent rules and current documentation links. SDK installation is script-only, not npm. Browser sessions need fresh, bound tokens; the existing unscoped cached server token is not a browser token issuer. No SDK script or browser capture is active yet.
+
 ## Remaining integration work
 
 - The owner supplied a detailed Document Verification webhook example, including identity fields, job/user references and fraud signals. It includes `clear` alongside high fraud risk and uses placeholder country `XX`; it is not approval evidence. Authentication/delivery rules are now supplied and the timestamp proof is implemented, but complete disposition schemas and trusted recovery/revision guarantees are still needed. No Smile ID callback route or result normalizer is active. See the [contract review](smile-id-v3-contract.md).
 - Confirm multipart object encoding against a real documentation example, full user-details schema, vendor image limits and idempotency/recovery rules. Body/consent fields and acceptance tracking have been supplied and implemented in the transport.
-- Verify the current web/Smile Links or other supported browser capture contract. The supplied overview documents REST and mobile SDKs, not a complete hosted-web procedure.
-- Establish trustworthy processing and recovery of the detailed webhook evidence. The timestamp-HMAC and payload example are supplied, but that HMAC does not cover identity fields. GET status tracking lacks detailed identity evidence and a decision revision. The supplied resend overview confirms 202/requeued delivery without supplying a full-result response schema; obtain its linked Replay API Reference, complete disposition schemas and finality/versioning before implementing recovery.
+- Implement the supplied hosted V12 browser flow after obtaining complete scoped-token payload and result callback schemas. Match its exact product/environment values and enforce ownership, current attempt and country on the server.
+- Establish trustworthy processing and recovery of the detailed webhook evidence. The timestamp-HMAC and payload example are supplied, but that HMAC does not cover identity fields. GET status tracking lacks detailed identity evidence and a decision revision. Callback replay is implemented as delivery recovery only; complete disposition schemas, evidence binding and finality/versioning remain outstanding.
 - Implement the adapter with durable intents, authenticated callbacks, reconciliation, correction history, strict age/country checks and mode isolation. Register it only after these checks are implemented.
 - Confirm document/check coverage for each enabled market and exercise actual account-backed sandbox journeys. Local fixtures do not establish country coverage or vendor integration success.
 - Choose/connect bank ownership verification and configure Redis/Render worker hosting. Staging financial access remains disabled.

@@ -19,6 +19,11 @@ import {
   SmileIdWebhookSignal,
   verifySmileIdWebhookSignal,
 } from "./smile-id.webhook";
+import {
+  parseSmileIdReplayAcceptance,
+  SmileIdReplayAccepted,
+  SmileIdReplayError,
+} from "./smile-id.replay";
 
 const tokenUrls = {
   sandbox: "https://testapi.smileidentity.com/v3/token",
@@ -211,6 +216,107 @@ export class SmileIdClient {
       );
     }
     return parseSmileIdStatus(data, response.status, expected);
+  }
+  /** Queues callback delivery for an existing terminal job, not a verification.
+   * Uses the stored callback URL: overrides are deliberately not accepted.
+   * The adapter must durably record/rate-limit replay intents and reconcile an
+   * uncertain POST before requesting another replay. No automatic retries.
+   */
+  async replayVerificationWebhook(
+    input: SmileIdStatusLookup,
+  ): Promise<SmileIdReplayAccepted> {
+    let expected: SmileIdStatusLookup;
+    try {
+      expected = prepareSmileIdStatusLookup(input);
+    } catch {
+      throw new SmileIdReplayError(
+        "not_queued",
+        "invalid_request",
+        "Provide the stored Smile ID job reference and its expected user.",
+      );
+    }
+    let tracking: SmileIdJobStatus;
+    try {
+      tracking = await this.getVerificationStatus(expected);
+    } catch (error) {
+      throw new SmileIdReplayError(
+        "not_queued",
+        "lookup_failed",
+        "Smile ID job status could not be confirmed; callback replay was not requested.",
+        error instanceof SmileIdStatusError ? error.httpStatus : undefined,
+      );
+    }
+    if (tracking.phase !== "terminal")
+      throw new SmileIdReplayError(
+        "not_queued",
+        "not_terminal",
+        "Wait for the existing Smile ID job to complete before requesting replay.",
+      );
+    let headers: Record<string, string>;
+    try {
+      headers = await this.getRequestHeaders();
+    } catch {
+      throw new SmileIdReplayError(
+        "not_queued",
+        "authentication_unavailable",
+        "Smile ID authentication unavailable; callback replay was not requested.",
+      );
+    }
+    let response: Response;
+    try {
+      response = await this.#transport(
+        tokenUrls[this.mode].replace(
+          /\/token$/,
+          `/replay/${encodeURIComponent(expected.jobId)}`,
+        ),
+        {
+          method: "POST",
+          headers: { ...headers, Accept: "application/json" },
+          redirect: "error",
+          credentials: "omit",
+          signal: AbortSignal.timeout(10000),
+          // Bodyless replay uses the stored callback; never send JSON or an override.
+        },
+      );
+    } catch {
+      throw new SmileIdReplayError(
+        "unknown",
+        "unavailable",
+        "Smile ID replay outcome is unknown; reconcile before retrying.",
+      );
+    }
+    if (response.status !== 202) {
+      if (response.status === 401)
+        this.invalidateAccessToken(headers["SmileID-Token"]);
+      try {
+        await response.body?.cancel();
+      } catch {
+        /* Do not expose provider response details. */
+      }
+      const rejected = [400, 401, 403, 404, 409, 415].includes(response.status);
+      throw new SmileIdReplayError(
+        rejected ? "not_queued" : "unknown",
+        response.status === 409
+          ? "not_terminal"
+          : response.status === 404
+            ? "not_found"
+            : "provider_error",
+        `Smile ID did not acknowledge callback replay (HTTP ${response.status}); retain and reconcile the existing job.`,
+        response.status,
+      );
+    }
+    let data: Record<string, unknown>;
+    try {
+      data = await this.#readResponse(response);
+    } catch {
+      throw new SmileIdReplayError(
+        "unknown",
+        "invalid_response",
+        "Smile ID replay acknowledgement is unreadable; reconcile before retrying.",
+        202,
+      );
+    }
+    return parseSmileIdReplayAcceptance(data, expected);
   }
   /** Timestamp/partner proof only; callback JSON is not covered by this HMAC.
    * Uses this instance's configured credentials, not values from the callback.
