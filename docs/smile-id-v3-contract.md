@@ -64,11 +64,49 @@ The reference separately labels `Headers` with `api_version`, `job_id` and `user
 
 `getVerificationStatus({ jobId, userId })` now validates the stored expected references before requesting `GET /v3/status/{jobId}` from the fixed environment origin. It requires an exact job/user match in the flat body, a valid response-generation timestamp and agreement between HTTP status and the body disposition. It returns only tracking fields, with a `processing` or `terminal` phase, and discards raw messages and extra data. A 401 invalidates only the rejected token without replaying the lookup; 404 and other failures retain the existing operation rather than creating a replacement. No public status/token route or automatic polling loop is added.
 
-The supplied status fields do not include extracted identity data or individual document/face/liveness checks. This lookup therefore does **not** produce a KYC decision, even for `clear`. Detailed evidence and its authenticated retrieval/webhook contract are still required before approval logic or an adapter can be activated. Determine where that evidence is available rather than assuming the status endpoint returns undocumented identity fields.
+The supplied status fields do not include extracted identity data or individual document/face/liveness checks. This lookup therefore does **not** produce a KYC decision, even for `clear`. The owner has now supplied a detailed webhook example below; its authentication and recovery contract are still required before approval logic or an adapter can be activated. Do not assume the status endpoint returns undocumented identity fields.
+
+## Document Verification webhook example supplied by the owner
+
+The owner supplied an example JSON payload from **Webhook Types — Document Verification**. This is a documentation example, not a received/authenticated callback or completed sandbox verification.
+
+- The top level has `status`, `message`, nullable `reason`, `product: document_verification`, `created_at` and `completed_at`.
+- Provider references are in `partner_params.job_id` and `partner_params.user_id`. The example does not echo `zetmond_operation_id`; use the durably stored provider-job/user mapping, not an assumed metadata echo, to find the internal operation.
+- `id_fields` includes first/other/last/full name, ID number/type, country, DOB, issuance/expiration dates, deceased status, address and other optional/null fields. These are distinct from `user_provided_info`, which contains consumer-stated names/contact details and must not substitute for extracted identity evidence.
+- `antifraud.fraud_risk` has `risk_indicators`, `risk_level`, `risk_score` and indicator details. `antifraud.smile_secure` has its own `status`, message and suspect users; `antifraud.summary` has `fraud_detected` and `fraud_sources`.
+- `kyc_receipt` and `image_links` contain private result-document/image URLs. The example also includes device/fingerprint/location/network information and a detailed returned consent record. These are not ordinary customer response fields; retention and any necessary encrypted storage must be deliberate.
+
+The example combines **`status: clear`, `risk_level: high`, `risk_score: 100` and populated risk indicators**, while `fraud_detected` is false and Smile Secure is clear. Do not discard those conflicting signals or approve from the top-level status alone. The country `XX` and all identities/URLs are documentation placeholders, not evidence for an enabled launch market. No risk-score threshold or live approval policy is established by this example.
+
+The returned consent uses `schema_version: ISO27560-v1`, record/principal IDs, language, privacy notice, events and purposes. It is distinct from the four-field request consent. Its example controllers, lawful bases, jurisdictions and retention periods do not establish Zetmond's policy or prove an actual user acknowledgement.
+
+The body example contains no webhook authentication headers, signed timestamp, event ID, environment marker or monotonic decision revision. The owner subsequently supplied the V3 authentication/delivery reference below. Payload timestamps and arrival order still do not establish authenticity, freshness or revision ordering. Obtain required/nullable field definitions and examples for attention/block/error before writing a complete normalizer. Do not manufacture government-ID/liveness evidence flags from this single sample.
+
+The callback route, result normalizer and active adapter remain unimplemented. The existing configured-provider registry stays empty; recording this example enables no eligibility or account access.
+
+## Webhook signature and delivery reference supplied by the owner
+
+The current V3 receive-webhooks reference states that results arrive as JSON in an HTTP POST. It gives this exact formula, with the literal API key used to generate the **original verification token** as the HMAC key:
+
+```text
+Base64(HMAC-SHA256(api_key, Response-Timestamp + partner_id + "sid_request"))
+```
+
+`Response-Signature` carries that Base64 digest and `Response-Timestamp` the ISO timestamp used verbatim in the calculation. Additional headers are `smileid-job-id`, `user-id`, `Api-Version` and `Content-Type: application/json`.
+
+The documented formula does **not** include raw JSON, job/user IDs or an environment marker. It therefore does not provide a signature over those values, despite the reference's general description of payload integrity. A captured valid proof is unchanged if those values change. Never use this HMAC alone to trust callback identity fields or approve KYC. Detailed evidence needs a trusted canonical source or an independently verified callback mechanism that binds it to the operation. The existing body-free status lookup does not supply that detailed evidence.
+
+`SmileIdClient.verifyWebhookSignal()` implements the documented calculation with constant-time digest comparison, canonical Base64 validation, case-insensitive single-valued headers and a **local five-minute clock-skew window**. The exact timestamp string is signed without normalization. Known job/user references must match stored expectations. These references are reconciliation locators, not HMAC-bound evidence; mode is supplied by the configured client, not authenticated from the callback. Original job credentials and mode must remain available when keys rotate.
+
+The helper returns only `purpose: reconcile_only`, configured mode, job/user references, signed time and a local deterministic deduplication key. It accepts no raw body, grants no eligibility and is not wired into `VerificationProvider.authenticateWebhook` or an HTTP route. A future durable inbox must deduplicate and schedule authenticated canonical lookup; the freshness window is not durable replay protection. The helper does not store notification state or prove live vendor compatibility.
+
+The reference specifies up to three retries after the first attempt (four total), enqueued immediately after failure/non-2xx. A server must respond within **35 seconds**. Successful 2xx stops retries; after exhaustion, recovery requires requesting webhook resend. The reference describes at-least-once delivery and no guaranteed ordering across completed jobs. Design for duplicates, out-of-order arrivals and missing results after the retry budget; acknowledge only after a durable record is committed.
+
+The owner also supplied **Resend Webhook**: replaying a past verification by `job_id` returns `202 Accepted` and **requeues delivery to the configured callback URL**. The overview does not document a detailed verification result in that API response. It links to `/api-reference/core-resources/replay-webhook/replay-a-verification-webhook.md` for the actual method, endpoint, request and response schemas; those have not yet been supplied. Do not guess or implement a replay endpoint from this overview. Timestamp/key behavior on retries/resend and trustworthy detailed-result recovery remain outstanding.
 
 ## Existing code boundary
 
-`src/providers/smile-id.client.ts` now implements **V3 server token authentication** from the supplied contract, replacing the preliminary V1 signing/web-token/job-status methods. Fresh-image multipart submission, acceptance tracking and bound job-status retrieval are implemented from the supplied references. Detailed identity evidence, webhook handling and capture still need their own verified contracts. Do not register an active provider based on token acquisition or terminal status alone.
+`src/providers/smile-id.client.ts` now implements **V3 server token authentication** from the supplied contract, replacing the preliminary V1 signing/web-token/job-status methods. Fresh-image multipart submission, acceptance tracking, bound job-status retrieval and a timestamp-HMAC notification check are implemented from the supplied references. Detailed webhook fields and delivery rules are recorded; trustworthy result processing/recovery and supported capture remain outstanding. Do not register an active provider based on token acquisition, terminal status or the notification proof alone.
 
 The generic Task 3 backend already supports durable work, independently authenticated provider callbacks, canonical reconciliation, owner protection, case history and eligibility checks. These remain integration points; no Smile ID adapter is active. Storing Render credentials does not establish authentication or completed KYC.
 
@@ -78,8 +116,8 @@ The supplied page links to these current documentation resources:
 
 1. **Perform a Document Verification** — `/api-reference/products/document-verification/perform-a-document-verification.md`: body, consent and acceptance descriptions have been supplied. Still obtain the actual multipart example/object encoding, complete `user_details` schema, image quality/size limits and error/retry semantics. Confirm idempotency and recovery after an uncertain submission.
 2. **Retrieve a Verification Result** — `/api-reference/core-resources/verification-status/retrieve-a-verification-result.md`: GET path, exact job-ID format, token authentication, HTTP outcomes, status fields and flat processing example have been supplied and implemented as tracking. Still establish how to obtain detailed identity evidence, product binding and any decision-version/reconciliation guarantees. The supplied status schema does not itself contain name/DOB/country or check evidence.
-3. **Webhook Types — Document Verification** — `/developer-resources/essentials/verification-webhooks/webhook-types/document-verification.md`: event envelope, result payload and job/customer correlation. Also obtain the receive-webhooks authentication/signature documentation before implementing intake.
-4. **Resend Webhook** — `/developer-resources/essentials/verification-webhooks/receive-webhooks/resend-webhook.md`: delivery, replay and retries.
+3. **Webhook Types — Document Verification** — `/developer-resources/essentials/verification-webhooks/webhook-types/document-verification.md`: detailed example, timestamp-HMAC authentication and delivery rules have been supplied. Still obtain required/nullable schemas for each disposition. Establish trustworthy identity-result binding, conflicting-fraud handling and canonical recovery/revision guarantees before approval mapping.
+4. **Resend Webhook** — `/developer-resources/essentials/verification-webhooks/receive-webhooks/resend-webhook.md`: supplied overview confirms 202/requeued callback delivery. Obtain its linked **Replay a Verification Webhook** API Reference at `/api-reference/core-resources/replay-webhook/replay-a-verification-webhook.md`, plus timestamp/key behavior on retries/resend. The ordinary delivery retry budget/deadline is recorded above.
 5. **Verify with Document** — `/id-coverage/verify-with-document.md`: supported documents/checks per launch market and applicable account/sandbox capability.
 
 The overview lists REST and mobile SDK integration. It does not establish the current hosted-web/Smile Links contract or a supported web liveness-capture procedure. Resolve that capture contract before implementing the customer journey. A direct REST path may require a different design from the originally proposed provider-hosted capture.

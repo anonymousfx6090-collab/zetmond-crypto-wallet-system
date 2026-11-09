@@ -14,6 +14,11 @@ import {
   SmileIdStatusError,
   SmileIdStatusLookup,
 } from "./smile-id.status";
+import {
+  SmileIdWebhookHeaders,
+  SmileIdWebhookSignal,
+  verifySmileIdWebhookSignal,
+} from "./smile-id.webhook";
 
 const tokenUrls = {
   sandbox: "https://testapi.smileidentity.com/v3/token",
@@ -206,6 +211,21 @@ export class SmileIdClient {
       );
     }
     return parseSmileIdStatus(data, response.status, expected);
+  }
+  /** Timestamp/partner proof only; callback JSON is not covered by this HMAC.
+   * Uses this instance's configured credentials, not values from the callback.
+   */
+  verifyWebhookSignal(
+    headers: SmileIdWebhookHeaders,
+    expected: SmileIdStatusLookup,
+    nowMillis = Date.now(),
+  ): SmileIdWebhookSignal {
+    return verifySmileIdWebhookSignal(
+      headers,
+      expected,
+      { partnerId: this.#partnerId, apiKey: this.#apiKey, mode: this.mode },
+      nowMillis,
+    );
   }
   /** On an authentication failure, pass the rejected token. A late rejection of
    * an older token must not evict a newer token. This never replays an API request.
