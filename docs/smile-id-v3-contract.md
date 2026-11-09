@@ -12,25 +12,32 @@ Source: the owner supplied the text of Smile ID's current **Document Verificatio
 
 The owner also supplied these required headers from the V3 verification reference:
 
-| Header | Documented value |
-| --- | --- |
-| `SmileID-Partner-ID` | The partner identifier. |
-| `SmileID-Token` | An access token returned by `/v3/token`. |
+| Header               | Documented value                         |
+| -------------------- | ---------------------------------------- |
+| `SmileID-Partner-ID` | The partner identifier.                  |
+| `SmileID-Token`      | An access token returned by `/v3/token`. |
 
-This establishes token-based authentication for the verification request. It does not establish how `/v3/token` authenticates, its HTTP method/body, token expiry/refresh rules or environment URLs. The Render API key must not simply be substituted for `SmileID-Token`. Obtain the token endpoint's full request/response documentation before implementing V3 authentication; no real credential or token value was supplied in chat.
+The owner subsequently supplied the token contract:
 
-| Vendor disposition | Required Zetmond handling |
-| --- | --- |
-| `clear` | Consider approval only after the authenticated result is bound to the current operation and required identity evidence, country and minimum age are validated. A status string alone is insufficient. |
-| `attention` | Keep financial eligibility blocked. Account settings can allow expired documents or underage results to reach this disposition; Zetmond must still enforce its own requirements. Review/correction policy must not silently approve these cases. |
-| `block` | Do not approve the verification. Preserve the vendor reason and case history. An outcome must not silently turn into a blanket Zetmond account restriction. |
-| `error` | Treat verification as incomplete, not proof of an invalid identity. Reconcile the existing operation and follow documented retry/correction rules before submitting anything again. |
+- `POST https://testapi.smileidentity.com/v3/token` for sandbox, and `POST https://api.smileidentity.com/v3/token` for production.
+- Required `SmileID-Partner-ID` and `SmileID-API-Key` headers. The documented minimal curl request is bodyless, with `Accept: application/json`.
+- A body is optional. If sent, it must be `multipart/form-data`; JSON may return `415`. Supported optional fields include `user_id`, `partner_params`, `product`, `use_enrolled_image` and `payload`; exact value/serialization contracts remain unprovided.
+- Success: HTTP `200`, `{ "token": "<JWT>" }`. Lifetime: 15 minutes. Tokens are environment-specific and go in `SmileID-Token` on subsequent requests with the partner ID.
+
+The server client now implements the documented bodyless authentication request and token lifecycle. Scoped multipart/browser tokens are not implemented by this helper. No real credential/token was provided in chat, and fixture tests do not prove live authentication.
+
+| Vendor disposition | Required Zetmond handling                                                                                                                                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `clear`            | Consider approval only after the authenticated result is bound to the current operation and required identity evidence, country and minimum age are validated. A status string alone is insufficient.                                            |
+| `attention`        | Keep financial eligibility blocked. Account settings can allow expired documents or underage results to reach this disposition; Zetmond must still enforce its own requirements. Review/correction policy must not silently approve these cases. |
+| `block`            | Do not approve the verification. Preserve the vendor reason and case history. An outcome must not silently turn into a blanket Zetmond account restriction.                                                                                      |
+| `error`            | Treat verification as incomplete, not proof of an invalid identity. Reconcile the existing operation and follow documented retry/correction rules before submitting anything again.                                                              |
 
 The documented reasons include age/expiry, document-copy and risk signals, face/liveness/document failures, unsupported documents and technical/image-processing failures. Unknown reason codes must never create an approval. Raw provider messages and image URLs must not be exposed automatically.
 
 ## Existing code boundary
 
-`src/providers/smile-id.client.ts` currently implements the **V1** signing/token/job-status primitives documented by `smile-identity-core` 3.2.1. Those fixtures do not validate V3 headers, requests, signatures or result schemas. Do not switch its paths to V3 or wire it into the active provider registry without verifying the new contracts.
+`src/providers/smile-id.client.ts` now implements **V3 server token authentication** from the supplied contract, replacing the preliminary V1 signing/web-token/job-status methods. Verification submission, canonical result retrieval, webhook handling and capture still need their own verified schemas. Do not register an active provider based on token acquisition alone.
 
 The generic Task 3 backend already supports durable work, independently authenticated provider callbacks, canonical reconciliation, owner protection, case history and eligibility checks. These remain integration points; no Smile ID adapter is active. Storing Render credentials does not establish authentication or completed KYC.
 

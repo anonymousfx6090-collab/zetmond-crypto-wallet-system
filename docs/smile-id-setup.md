@@ -1,63 +1,63 @@
 # Smile ID setup for Task 3
 
-Decision recorded 7 November 2026: the owner selected **Smile ID for KYC** and subsequently reported access to the Sandbox Credentials page. Credential availability is reported by the owner; no authenticated sandbox request has been demonstrated yet. Bank ownership verification remains a separate decision. No Smile ID adapter is active and Task 3 is not complete.
-
-## Account setup
-
-1. Open [Smile ID partner signup](https://portal.usesmileid.com/signup). This is the signup URL linked by Smile ID’s official Node SDK README. If signup requires assistance, use its [contact page](https://usesmileid.com/contact-us).
-2. Complete account onboarding and obtain access to the **sandbox** dashboard. The SDK README describes sandbox access as part of signup; actual availability is subject to Smile ID’s current account process.
-3. Locate the **Partner ID** and **sandbox API key** in the account’s integration settings. Do not paste keys or passwords into chat or commit them. Store them in protected Render settings using the names below. The existing private `.env` remains untouched.
-4. Obtain the current hosted web-capture documentation and enabled product details for government-ID plus selfie/liveness checks. Confirm the supported documents, trusted date-of-birth/country evidence and sandbox fixtures for NG, GH, ZA and KE. Selection alone does not establish country coverage or account eligibility for Zetmond.
-5. Provide access to the applicable non-secret integration documentation so the capture, callback, idempotency and canonical decision mapping can be implemented and tested against the actual contract. Tell the development chat when sandbox access is ready; keep credentials in the service’s protected configuration.
-
-The selected capture product must support Zetmond’s ID, liveness and age requirements. A successful selfie registration or identity lookup alone must not become full KYC approval. Confirm any bank-verification offering separately: bank-name lookup alone is insufficient ownership evidence.
-
-## Official sources inspected
-
-- [Official Node SDK repository](https://github.com/smileidentity/smile-identity-core-js), inspected at commit `2e0ecd623f40d1ba944b06fe43dbdcc4176cfff5`.
-- Published [`smile-identity-core` 3.2.1](https://www.npmjs.com/package/smile-identity-core/v/3.2.1). Its downloaded archive matched the registry SHA-512 integrity value. The package was not installed as an application dependency. Its signature class was invoked offline with a fixture key to check a fixed signing test vector; no real credentials or API requests were involved.
-- The full [Smile ID documentation](https://docs.usesmileid.com/) was blocked by this workspace’s outbound network policy. No request was sent to Smile ID’s verification APIs and no real customer evidence or credentials were accessed.
-
-The SDK verifies these server-side contracts:
-
-| Capability             | SDK contract                                                                                             | Integration implication                                                                                                                                                                                    |
-| ---------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Environment            | Sandbox `https://testapi.smileidentity.com/v1`; live `https://api.smileidentity.com/v1`                  | Keep credentials, data and enabled adapters separated by mode.                                                                                                                                             |
-| Request signing        | HMAC-SHA256 with the API-key string over timestamp, Partner ID and `sid_request`; Base64 output          | Match the vendor algorithm exactly; do not decode or reinterpret the API key.                                                                                                                              |
-| Hosted-web token       | `POST /token` with `user_id`, `job_id`, `product`, `callback_url`, `partner_id`, signature and timestamp | A token is authentication for capture, not an approval or a documented hosted redirect URL. Capture embedding/session-expiry details still need verification.                                              |
-| Canonical job status   | `POST /job_status` with user/job/partner identifiers, `history`, `image_links` and signature/timestamp   | Use stable operation identifiers. Disable image links when unnecessary; verify response authenticity and binding before applying a decision.                                                               |
-| Signature verification | Timing-safe comparison against the expected timestamp signature                                          | This SDK signature does not include the full JSON body. Callback fields must not directly approve a case; use callbacks to schedule canonical authenticated lookup. Confirm freshness and replay handling. |
-
-The public SDK examples do not establish the complete result/evidence schema or monotonic finality rules required by Zetmond’s provider contract. Do not invent result-code mappings, hosted capture URLs, country support, bank endpoints or revision numbers. Resolve those through current vendor documentation and sandbox evidence before activating an adapter.
-
-On 9 November 2026, the owner supplied the current Document Verification overview. It documents an asynchronous **V3** submission endpoint and different result dispositions. The existing V1 client is not a V3 integration. See the [V3 contract review](smile-id-v3-contract.md) for confirmed facts and the remaining linked request, result, webhook and capture documentation.
+Updated 9 November 2026. The owner selected Smile ID for KYC, obtained sandbox credentials and reported saving them in Render. The owner last confirmed that the API health check returned staging. **The code now implements V3 token authentication; no Smile ID verification adapter is active and Task 3 is not complete.** Bank verification remains a separate integration decision.
 
 ## Render credential settings
 
-In **Render → zetmond-wallet → Environment → Edit**, add these rows without changing existing values:
+Use **Render → zetmond-wallet → Environment → Edit**:
 
-| Variable              | Value                                                            |
-| --------------------- | ---------------------------------------------------------------- |
-| `SMILE_ID_PARTNER_ID` | Partner ID from the Smile ID dashboard                           |
-| `SMILE_ID_API_KEY`    | Sandbox API key from Sandbox Credentials; keep the value private |
-| `SMILE_ID_MODE`       | `sandbox`                                                        |
+| Variable              | Value                                              |
+| --------------------- | -------------------------------------------------- |
+| `SMILE_ID_PARTNER_ID` | Partner ID from Smile ID                           |
+| `SMILE_ID_API_KEY`    | The actual sandbox API key; keep the value private |
+| `SMILE_ID_MODE`       | `sandbox`                                          |
 
-These names are parsed by the new API configuration. The API key is a server secret; never put it in a `NEXT_PUBLIC_` variable, the customer/marketing Vercel settings, source control or chat. Preserve `DEPLOYMENT_STAGE=staging`. Partial credential configuration does not break the existing authentication service; constructing the Smile ID client requires the complete pair and a mode consistent with the deployment stage.
+Preserve the existing database/encryption key and `DEPLOYMENT_STAGE=staging`. These credentials are server settings, not customer/marketing Vercel or `NEXT_PUBLIC_` values. The owner’s private `.env` was not read or changed. Partial configuration does not break ordinary account access; explicitly constructing a Smile ID client requires a complete pair and a mode consistent with the hosted deployment stage.
 
-`src/providers/smile-id.client.ts` implements only the SDK-verified server primitives: request signing, hosted-web token requests and authenticated canonical status requests. Origins are fixed per mode, redirects are rejected, requests have deadlines, response size is bounded and errors omit upstream details. Credential fields use JavaScript private fields. Responses are server-only envelopes, not domain approval evidence. No automatic retry is applied to an unknown provider outcome.
+## V3 authentication implemented
 
-Validation: the API build and 34 tests (10 Smile ID client tests plus 24 authentication regressions) passed in the isolated workspace, excluding private environment files. Transport tests use fixture responses; no authenticated Smile ID sandbox journey has run.
+The owner supplied this token contract on 9 November 2026:
 
-The client has no public HTTP route and is **not registered as an active verification adapter**. Storing credentials alone does not activate KYC. Capture integration, product selection, result/evidence binding and finality still need the current documented contracts and real sandbox evidence. The existing UI remains unavailable until that work is finished.
+- Sandbox: `POST https://testapi.smileidentity.com/v3/token`.
+- Production: `POST https://api.smileidentity.com/v3/token`.
+- Required headers: `SmileID-Partner-ID` and `SmileID-API-Key`; `Accept: application/json` requests the JSON response.
+- Body is optional. The documented minimal request has no body. When present, a body must be `multipart/form-data`; JSON can produce `415`.
+- Success is `200` with a `token` JWT. The token lasts 15 minutes and belongs to the selected environment.
+- Subsequent verification requests use `SmileID-Partner-ID` plus `SmileID-Token`. The access token is not the API key and is not the mobile SDK configuration's `auth_token`.
 
-## Completing the integration
+`apps/api/src/providers/smile-id.client.ts` uses the documented **bodyless** token request. It does not send JSON or a Content-Type header to the token endpoint. The client keeps API keys and tokens in private fields, rejects redirects, bounds response sizes, sets a request deadline and reports safe errors without upstream bodies or credentials.
 
-After sandbox access and the missing contracts are available:
+Tokens are reused per client/credential/environment instance and refreshed after 14 minutes, measured from request start with a monotonic clock. Concurrent requests share token issuance. Expired or invalidated tokens are not served, and an old refresh cannot replace a newer token. A late rejection of an older token does not discard a newer one. Token failures do not automatically replay verification or other business requests.
 
-- Implement Smile ID capture/session creation, recovery and allowlisted redirects or embedded capture using the selected documented product.
-- Bind all results to persisted customer/case/attempt and sandbox/live mode. Verify ID, liveness, country and age evidence; preserve correction/history and reject stale outcomes.
-- Register only the implemented provider callback route, with authentication, freshness, durable deduplication and canonical reconciliation. Do not weaken ordinary browser CSRF checks.
-- Add real vendor-contract tests and account-backed sandbox journeys for each enabled market. Existing local fixtures are not Smile ID sandbox evidence.
-- Configure Redis and the Render verification worker, then exercise the deployed customer flow. Keep staging financial access disabled.
+This is a **server-only, unscoped token helper**. Optional token fields (`user_id`, `partner_params`, `product`, `use_enrolled_image`, `payload`) and browser-capture token scopes are not implemented without their exact field/serialization contracts. Do not expose this server token to customers or interpret JWT claims as KYC evidence. There is no public credential-check/token HTTP route.
 
-Smile ID credential configuration and server-client primitives are implemented; no Smile ID verification adapter, public provider endpoint or customer approval switch is active. Provider selection, account creation, adapter completion and successful sandbox evidence are separate milestones.
+## Owner-operated credential check
+
+After this branch is merged and the API build deployed, an owner-operated terminal in the service environment can run:
+
+```sh
+node apps/api/dist/check-smile-id.js
+```
+
+Or from the built API package: `pnpm --filter @zetmond/api smile:check`.
+
+For example, use a Render Shell if the service plan provides one. The command reads the protected service environment, requests a V3 token, and prints only success/failure and mode. It does not print a token/key, submit identity evidence or enable KYC. It exits nonzero for missing, mismatched or rejected credentials. No actual Smile ID authentication has been demonstrated in this workspace; automated tests use fixture responses.
+
+Validation: the isolated frozen dependency install and API TypeScript build passed, along with 17 V3 authentication/client checks. Two compiled-CLI fixture runs confirmed nonzero exits and secret-safe output for missing/invalid configuration. Private environment files were excluded, and no real Smile ID request was made by the agent.
+
+The normal API start/build commands are unchanged. Storing keys or running this check does not enable the capture journey.
+
+## References and superseded research
+
+The owner supplied the current Document Verification overview and V3 token method/headers/response/expiry details. See the [V3 contract review](smile-id-v3-contract.md) for the evidence and remaining references. The full documentation site remains blocked by this workspace's network policy.
+
+The official `smile-identity-core` 3.2.1 SDK was initially inspected at repository commit `2e0ecd623f40d1ba944b06fe43dbdcc4176cfff5`. That older SDK documented V1 signing/web-token/job-status primitives. The preliminary V1 methods have now been removed from the client rather than mixed with the supplied V3 contract; their original fixture tests are superseded by V3 authentication tests.
+
+## Remaining integration work
+
+- Obtain the full document-verification request body, image encoding/limits, operation identifiers and idempotency/recovery rules.
+- Verify the current web/Smile Links or other supported browser capture contract. The supplied overview documents REST and mobile SDKs, not a complete hosted-web procedure.
+- Obtain canonical result lookup and webhook authentication/payload schemas, including job/customer binding, name/DOB/country evidence and finality/versioning.
+- Implement the adapter with durable intents, authenticated callbacks, reconciliation, correction history, strict age/country checks and mode isolation. Register it only after these checks are implemented.
+- Confirm document/check coverage for each enabled market and exercise actual account-backed sandbox journeys. Local fixtures do not establish country coverage or vendor integration success.
+- Choose/connect bank ownership verification and configure Redis/Render worker hosting. Staging financial access remains disabled.

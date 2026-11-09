@@ -80,7 +80,7 @@ node apps/api/dist/worker.js
 
 Share the appropriate staging database, encryption key and provider configuration with that worker. Apply migrations through the API deployment first. Use Redis with a `noeviction` policy and provider-appropriate persistence/availability. Redis credentials stay server-side. The worker deliberately exits with an explanatory message when no providers are configured; **do not provision a continuously restarting Render worker before an adapter is selected**.
 
-`SMILE_ID_PARTNER_ID`, `SMILE_ID_API_KEY` and `SMILE_ID_MODE=sandbox` now prepare Smile ID credentials for the server-only request client. The client is not yet an active capture/decision adapter. See [Smile ID setup](smile-id-setup.md) for credential storage and remaining contracts. No hosted worker/Redis service was created, no Vercel/Render deployment triggered, and no live KYC collection enabled by this branch.
+`SMILE_ID_PARTNER_ID`, `SMILE_ID_API_KEY` and `SMILE_ID_MODE=sandbox` now configure a server-only V3 token-authentication client, with short-lived token caching and an owner-operated credential check. The preliminary V1 methods have been replaced; the client is not yet an active capture/decision adapter. See [Smile ID setup](smile-id-setup.md) for credential storage and remaining contracts. No hosted worker/Redis service was created, no Vercel/Render deployment triggered, and no live KYC collection enabled by this branch.
 
 ## Validation and remaining evidence
 

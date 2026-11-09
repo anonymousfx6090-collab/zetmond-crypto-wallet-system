@@ -1,44 +1,35 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import { Config, ConfigurationError } from "../config";
 
-const origins = {
-  sandbox: "https://testapi.smileidentity.com/v1",
-  live: "https://api.smileidentity.com/v1",
+const tokenUrls = {
+  sandbox: "https://testapi.smileidentity.com/v3/token",
+  live: "https://api.smileidentity.com/v3/token",
 };
-type Mode = keyof typeof origins;
+type Mode = keyof typeof tokenUrls;
 type Transport = typeof fetch;
-type Envelope = Record<string, unknown>;
+type CachedToken = { value: string; usableUntil: number };
 const responseLimit = 256 * 1024;
+// The supplied V3 contract gives a 15-minute lifetime. Refresh a minute early,
+// measuring from request start with a monotonic clock rather than wall-clock time.
+const tokenCacheMs = 14 * 60 * 1000;
 export class SmileIdError extends Error {}
 
-/** Verified against the official smile-identity-core 3.2.1 signing algorithm.
- * This signature covers timestamp/partner identity, not the full response body.
- */
-export function smileIdSignature(
-  partnerId: string,
-  apiKey: string,
-  timestamp: string,
-) {
-  return createHmac("sha256", apiKey)
-    .update(timestamp, "utf8")
-    .update(partnerId, "utf8")
-    .update("sid_request", "utf8")
-    .digest("base64");
-}
-
-/** Server-only primitives, not an enabled KYC adapter. Capture, finality and
- * evidence mapping must be verified before wiring this into the provider registry.
+/** Server-only V3 authentication. Tokens remain on the server and are never
+ * evidence of a customer's identity. No verification adapter is enabled here.
  */
 export class SmileIdClient {
   #partnerId: string;
   #apiKey: string;
   #transport: Transport;
-  #now: () => Date;
+  #now: () => number;
+  #cached?: CachedToken;
+  #pending?: Promise<CachedToken>;
+  #generation = 0;
   readonly mode: Mode;
   constructor(
     credentials: { partnerId: string; apiKey: string; mode: Mode },
     transport: Transport = fetch,
-    now: () => Date = () => new Date(),
+    now: () => number = () => performance.now(),
   ) {
     this.#partnerId = credentials.partnerId;
     this.#apiKey = credentials.apiKey;
@@ -46,128 +37,100 @@ export class SmileIdClient {
     this.#transport = transport;
     this.#now = now;
   }
-  async getWebToken(input: {
-    userId: string;
-    jobId: string;
-    product: string;
-    callbackUrl: string;
-  }) {
-    let callback: URL;
-    try {
-      callback = new URL(input.callbackUrl);
-    } catch {
-      throw new SmileIdError("Smile ID requires a valid HTTPS callback URL.");
+  async getAccessToken(): Promise<string> {
+    if (this.#cached && this.#now() < this.#cached.usableUntil)
+      return this.#cached.value;
+    if (!this.#pending) {
+      const startedAt = this.#now(),
+        generation = this.#generation;
+      const pending = this.#issueToken().then((value) => {
+        if (
+          generation !== this.#generation ||
+          this.#now() >= startedAt + tokenCacheMs
+        )
+          throw new SmileIdError(
+            "Smile ID token request was superseded or expired. Request a fresh token.",
+          );
+        const result = { value, usableUntil: startedAt + tokenCacheMs };
+        this.#cached = result;
+        return result;
+      });
+      this.#pending = pending;
+      const clear = () => {
+        if (this.#pending === pending) this.#pending = undefined;
+      };
+      // Both handlers resolve so failed token requests leave no unhandled cleanup promise.
+      void pending.then(clear, clear);
     }
-    if (
-      callback.protocol !== "https:" ||
-      callback.username ||
-      callback.password ||
-      callback.hash
-    )
-      throw new SmileIdError("Smile ID requires a valid HTTPS callback URL.");
-    if (
-      ![input.userId, input.jobId, input.product].every(
-        (v) => typeof v === "string" && v.length > 0 && v.length <= 200,
-      )
-    )
-      throw new SmileIdError(
-        "Smile ID requires stable user/job identifiers and a selected product.",
-      );
-    const data = await this.#post("token", {
-      user_id: input.userId,
-      job_id: input.jobId,
-      product: input.product,
-      callback_url: input.callbackUrl,
-    });
-    if (
-      typeof data.token !== "string" ||
-      !data.token ||
-      data.token.length > 16384
-    )
-      throw new SmileIdError("Smile ID returned an invalid capture token.");
-    // Never return request signing data, API keys or arbitrary provider fields.
-    return { token: data.token };
+    return (await this.#pending).value;
   }
-  async getJobStatus(userId: string, jobId: string): Promise<Envelope> {
-    if (
-      ![userId, jobId].every(
-        (v) => typeof v === "string" && v.length > 0 && v.length <= 200,
-      )
-    )
-      throw new SmileIdError("Smile ID requires stable user/job identifiers.");
-    const data = await this.#post("job_status", {
-      user_id: userId,
-      job_id: jobId,
-      history: false,
-      image_links: false,
-    });
-    if (!this.verifyTimestampSignature(data.timestamp, data.signature))
-      throw new SmileIdError("Smile ID returned an invalid status signature.");
-    // This is a raw server-only envelope, not approval evidence. The adapter must
-    // still validate job/customer binding, product, finality and all required checks.
-    return data;
+  async getRequestHeaders(): Promise<Record<string, string>> {
+    return {
+      "SmileID-Partner-ID": this.#partnerId,
+      "SmileID-Token": await this.getAccessToken(),
+    };
   }
-  verifyTimestampSignature(timestamp: unknown, signature: unknown): boolean {
+  /** On an authentication failure, pass the rejected token. A late rejection of
+   * an older token must not evict a newer token. This never replays an API request.
+   */
+  invalidateAccessToken(rejectedToken?: string) {
+    if (rejectedToken !== undefined && this.#cached?.value !== rejectedToken)
+      return;
+    this.#generation++;
+    this.#cached = undefined;
+    this.#pending = undefined;
+  }
+  async #issueToken(): Promise<string> {
+    let response: Response;
     try {
-      if (
-        (typeof timestamp !== "string" && typeof timestamp !== "number") ||
-        typeof signature !== "string" ||
-        signature.length !== 44
-      )
-        return false;
-      const normalized =
-        typeof timestamp === "number"
-          ? new Date(timestamp).toISOString()
-          : timestamp;
-      const time = Date.parse(normalized);
-      if (
-        !Number.isFinite(time) ||
-        Math.abs(this.#now().getTime() - time) > 300000
-      )
-        return false;
-      const received = Buffer.from(signature, "base64");
-      if (received.length !== 32 || received.toString("base64") !== signature)
-        return false;
-      return timingSafeEqual(
-        received,
-        Buffer.from(
-          smileIdSignature(this.#partnerId, this.#apiKey, normalized),
-          "base64",
-        ),
-      );
-    } catch {
-      return false;
-    }
-  }
-  async #post(
-    path: "token" | "job_status",
-    payload: Envelope,
-  ): Promise<Envelope> {
-    const timestamp = this.#now().toISOString();
-    try {
-      const response = await this.#transport(`${origins[this.mode]}/${path}`, {
+      response = await this.#transport(tokenUrls[this.mode], {
         method: "POST",
         redirect: "error",
         credentials: "omit",
         headers: {
-          "Content-Type": "application/json",
+          "SmileID-API-Key": this.#apiKey,
+          "SmileID-Partner-ID": this.#partnerId,
           Accept: "application/json",
         },
         signal: AbortSignal.timeout(10000),
-        body: JSON.stringify({
-          ...payload,
-          partner_id: this.#partnerId,
-          timestamp,
-          signature: smileIdSignature(this.#partnerId, this.#apiKey, timestamp),
-        }),
+        // The documented minimal request has no body and no Content-Type.
+        // Scoped multipart tokens need their own verified schema/cache policy.
       });
+    } catch {
+      // Never forward transport errors: they may include request credentials.
+      throw new SmileIdError(
+        "Smile ID token request unavailable. Check provider connectivity and retry safely.",
+      );
+    }
+    if (response.status !== 200) {
+      try {
+        await response.body?.cancel();
+      } catch {
+        /* No provider details in errors. */
+      }
+      throw new SmileIdError(
+        `Smile ID token request failed (HTTP ${response.status}).`,
+      );
+    }
+    const data = await this.#readResponse(response);
+    if (
+      typeof data.token !== "string" ||
+      data.token.length > 16384 ||
+      !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(data.token)
+    )
+      throw new SmileIdError("Smile ID returned an invalid access token.");
+    // Treat the JWT as an opaque credential. Do not interpret its claims as
+    // customer authorization, KYC evidence, or a substitute for provider results.
+    return data.token;
+  }
+  async #readResponse(response: Response): Promise<Record<string, unknown>> {
+    try {
       if (
-        !response.ok ||
         Number(response.headers.get("content-length")) > responseLimit ||
         !response.body
       ) {
         await response.body?.cancel();
-        throw new Error("Provider response unavailable");
+        throw new Error("Invalid provider response");
       }
       const reader = response.body.getReader(),
         chunks: Uint8Array[] = [];
@@ -189,23 +152,20 @@ export class SmileIdClient {
       const data: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       if (!data || typeof data !== "object" || Array.isArray(data))
         throw new Error("Invalid provider response");
-      return data as Envelope;
+      return data as Record<string, unknown>;
     } catch {
-      // Upstream errors and bodies can contain customer data or credentials.
-      throw new SmileIdError(
-        "Smile ID request unavailable. Retry only after reconciling the operation.",
-      );
+      throw new SmileIdError("Smile ID returned an invalid token response.");
     }
   }
 }
 
-/** Partial credentials can be stored during dashboard setup; no requests occur
- * until an implemented integration explicitly constructs this client.
+/** Optional configuration; no network calls occur until a completed integration
+ * requests a token. Credentials are fixed per instance and deployment mode.
  */
 export function configuredSmileIdClient(
   config: Config,
   transport?: Transport,
-  now?: () => Date,
+  now?: () => number,
 ) {
   const partnerId = config.SMILE_ID_PARTNER_ID,
     apiKey = config.SMILE_ID_API_KEY;
