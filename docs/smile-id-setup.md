@@ -30,6 +30,8 @@ The SDK verifies these server-side contracts:
 
 The public SDK examples do not establish the complete result/evidence schema or monotonic finality rules required by Zetmond’s provider contract. Do not invent result-code mappings, hosted capture URLs, country support, bank endpoints or revision numbers. Resolve those through current vendor documentation and sandbox evidence before activating an adapter.
 
+On 9 November 2026, the owner supplied the current Document Verification overview. It documents an asynchronous **V3** submission endpoint and different result dispositions. The existing V1 client is not a V3 integration. See the [V3 contract review](smile-id-v3-contract.md) for confirmed facts and the remaining linked request, result, webhook and capture documentation.
+
 ## Render credential settings
 
 In **Render → zetmond-wallet → Environment → Edit**, add these rows without changing existing values:
