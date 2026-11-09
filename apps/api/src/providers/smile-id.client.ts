@@ -7,6 +7,13 @@ import {
   SmileIdDocumentRequest,
   SmileIdSubmissionAccepted,
 } from "./smile-id.document";
+import {
+  parseSmileIdStatus,
+  prepareSmileIdStatusLookup,
+  SmileIdJobStatus,
+  SmileIdStatusError,
+  SmileIdStatusLookup,
+} from "./smile-id.status";
 
 const tokenUrls = {
   sandbox: "https://testapi.smileidentity.com/v3/token",
@@ -21,7 +28,7 @@ const responseLimit = 256 * 1024;
 const tokenCacheMs = 14 * 60 * 1000;
 export class SmileIdError extends Error {}
 
-/** Server-only V3 authentication. Tokens remain on the server and are never
+/** Server-only V3 transport. Tokens remain on the server and are never
  * evidence of a customer's identity. No verification adapter is enabled here.
  */
 export class SmileIdClient {
@@ -137,6 +144,68 @@ export class SmileIdClient {
       );
     }
     return parseSmileIdAcceptance(data, prepared);
+  }
+  /** Fetches tracking for an existing operation, never submits/recreates a job.
+   * Even a terminal clear response is not sufficient KYC evidence or approval.
+   */
+  async getVerificationStatus(
+    input: SmileIdStatusLookup,
+  ): Promise<SmileIdJobStatus> {
+    const expected = prepareSmileIdStatusLookup(input);
+    let headers: Record<string, string>;
+    try {
+      headers = await this.getRequestHeaders();
+    } catch {
+      throw new SmileIdStatusError(
+        "unavailable",
+        "Smile ID authentication unavailable; status was not requested.",
+      );
+    }
+    let response: Response;
+    try {
+      response = await this.#transport(
+        tokenUrls[this.mode].replace(
+          /\/token$/,
+          `/status/${encodeURIComponent(expected.jobId)}`,
+        ),
+        {
+          method: "GET",
+          headers: { ...headers, Accept: "application/json" },
+          redirect: "error",
+          credentials: "omit",
+          signal: AbortSignal.timeout(10000),
+        },
+      );
+    } catch {
+      throw new SmileIdStatusError(
+        "unavailable",
+        "Smile ID status lookup unavailable; retain the existing operation.",
+      );
+    }
+    if (response.status !== 200 && response.status !== 202) {
+      if (response.status === 401)
+        this.invalidateAccessToken(headers["SmileID-Token"]);
+      try {
+        await response.body?.cancel();
+      } catch {
+        /* Do not expose provider response details. */
+      }
+      throw new SmileIdStatusError(
+        response.status === 404 ? "not_found" : "provider_error",
+        `Smile ID status lookup failed (HTTP ${response.status}); retain and reconcile the existing operation.`,
+        response.status,
+      );
+    }
+    let data: Record<string, unknown>;
+    try {
+      data = await this.#readResponse(response);
+    } catch {
+      throw new SmileIdStatusError(
+        "invalid_response",
+        "Smile ID returned an unreadable status response.",
+      );
+    }
+    return parseSmileIdStatus(data, response.status, expected);
   }
   /** On an authentication failure, pass the rejected token. A late rejection of
    * an older token must not evict a newer token. This never replays an API request.

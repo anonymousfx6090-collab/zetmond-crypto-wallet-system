@@ -1,6 +1,6 @@
 # Smile ID setup for Task 3
 
-Updated 9 November 2026. The owner selected Smile ID for KYC, obtained sandbox credentials and reported saving them in Render. The owner last confirmed that the API health check returned staging. **The code now implements V3 token authentication and a fresh-image document-submission transport; no Smile ID verification adapter is active and Task 3 is not complete.** Bank verification remains a separate integration decision.
+Updated 9 November 2026. The owner selected Smile ID for KYC, obtained sandbox credentials and reported saving them in Render. The owner last confirmed that the API health check returned staging. **The code now implements V3 token authentication, fresh-image document submission and job-status retrieval; no Smile ID verification adapter is active and Task 3 is not complete.** Bank verification remains a separate integration decision.
 
 ## Render credential settings
 
@@ -63,11 +63,19 @@ JSON text is used for structured multipart parts; verify against the vendor's ac
 
 Validation: 15 document-submission checks and all 17 authentication/client checks passed, along with the isolated API TypeScript build. The checks cover native multipart encoding, consent and image constraints, correlation, response binding, exact V3 job-ID format and uncertain outcomes without replay. They use mocked HTTP responses and synthetic image-header bytes, not real identity evidence or a Smile ID sandbox call.
 
+## Job status lookup
+
+`getVerificationStatus({ jobId, userId })` makes a bodyless GET to `/v3/status/{jobId}` at the fixed sandbox/live origin with server-only token headers. The caller must supply references from the persisted current operation. The flat response must match both references and the documented HTTP/disposition combination: 202/processing or 200/clear, block, attention, error. The returned DTO contains tracking only; raw messages and extra provider data are discarded. `responseGeneratedAt` names the provider's `created_at` according to its documented meaning, not as an identity-verification timestamp or decision revision.
+
+Input/response mismatch, transport failures and HTTP errors are held as errors. In particular, a 404 can mean a missing job or the wrong partner/token-bound user; it must not authorize a new submission. A 401 invalidates the rejected cached token without automatic replay. Lookups use the existing bounded response reader, reject redirects and set a deadline. The method adds no HTTP route, active provider or polling worker.
+
+Validation: **44 targeted checks passed** (17 authentication/client, 15 document submission and 12 status retrieval), along with the isolated API TypeScript build. The status checks cover the supplied flat JSON contract, owner/job binding, all terminal dispositions, HTTP/body conflicts, unsafe references, ambiguous 404, 401 handling, bounded/sanitized failures and explicit subsequent polls. All HTTP responses are fixtures; no real provider call was made.
+
 ## Remaining integration work
 
 - Confirm multipart object encoding against a real documentation example, full user-details schema, vendor image limits and idempotency/recovery rules. Body/consent fields and acceptance tracking have been supplied and implemented in the transport.
 - Verify the current web/Smile Links or other supported browser capture contract. The supplied overview documents REST and mobile SDKs, not a complete hosted-web procedure.
-- Complete canonical result lookup: the owner supplied the sandbox status path, exact job-ID pattern, HTTP outcomes and status field descriptions; the request method and actual JSON examples/wire structure remain outstanding. The listed status fields do not include detailed identity evidence. Also obtain webhook authentication/payload schemas, including job/customer binding, name/DOB/country evidence and finality/versioning.
+- Obtain the detailed verification evidence and its canonical retrieval/authenticated webhook contract. GET status tracking is implemented, but the supplied schema has no name/DOB/country, document/face/liveness evidence or decision revision. Also obtain webhook authentication/payload schemas and establish job/customer/product binding and finality/versioning.
 - Implement the adapter with durable intents, authenticated callbacks, reconciliation, correction history, strict age/country checks and mode isolation. Register it only after these checks are implemented.
 - Confirm document/check coverage for each enabled market and exercise actual account-backed sandbox journeys. Local fixtures do not establish country coverage or vendor integration success.
 - Choose/connect bank ownership verification and configure Redis/Render worker hosting. Staging financial access remains disabled.

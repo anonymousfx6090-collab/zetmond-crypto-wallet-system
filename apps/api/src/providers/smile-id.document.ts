@@ -23,7 +23,10 @@ export const smileIdConsentSchema = z
   .object({
     granted: z.literal(true),
     granted_at: z.string().datetime({ offset: true }),
-    notice_language: z.string().regex(/^[A-Z]{2}$/),
+    notice_language: z
+      .string()
+      .length(2)
+      .regex(/^[A-Z]{2}$/),
     notice_privacy_policy_url: httpsUrl,
   })
   .strict();

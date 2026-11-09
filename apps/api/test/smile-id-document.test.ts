@@ -181,6 +181,7 @@ test("false/incomplete consent, invalid subject data and insecure callbacks are 
     { consent: { ...base.consent, granted: false } },
     { consent: { ...base.consent, granted_at: "not-a-date" } },
     { consent: { ...base.consent, notice_language: "en" } },
+    { consent: { ...base.consent, notice_language: "EN\n" } },
     {
       consent: {
         ...base.consent,
