@@ -13,8 +13,12 @@ export default function Policies() {
       </p>
       <p>
         Account information includes your email, phone, country and security
-        records. Do not upload identity documents here. Retention periods and
-        the complete production disclosures remain under review.
+        records. When sandbox identity verification is enabled, Smile ID
+        collects the document, selfie and liveness capture. Zetmond stores the
+        minimum verification evidence and history in encrypted records. Use only
+        Smile ID’s approved sandbox test data, without real identity documents.
+        Retention periods and the complete production disclosures remain under
+        review.
       </p>
       <Link href="/register">Back to registration</Link>
     </main>

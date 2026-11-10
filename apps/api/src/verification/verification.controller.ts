@@ -11,6 +11,10 @@ import { Request } from "express";
 import { z } from "zod";
 import { cookieName } from "../auth/auth.controller";
 import { VerificationService, bankInput, fail } from "./verification.service";
+import {
+  smileIdJobIdSchema,
+  smileIdUserIdSchema,
+} from "../providers/smile-id.document";
 const disclosure = z
   .object({ disclosureVersion: z.string().min(1).max(80) })
   .strict();
@@ -57,6 +61,33 @@ export class VerificationController {
   }
   @Get("banks") banks(@Req() req: Request) {
     return this.service.banks(this.session(req));
+  }
+  @Post("identity/capture") capture(
+    @Req() req: Request,
+    @Body() body: unknown,
+  ) {
+    const input = parse(
+      z.object({ attemptId: z.string().uuid() }).strict(),
+      body,
+    );
+    return this.service.browserCapture(this.session(req), input.attemptId);
+  }
+  @Post("identity/capture/submission") submitted(
+    @Req() req: Request,
+    @Body() body: unknown,
+  ) {
+    const input = parse(
+      z
+        .object({
+          attemptId: z.string().uuid(),
+          jobId: smileIdJobIdSchema.optional(),
+          userId: smileIdUserIdSchema.optional(),
+        })
+        .strict()
+        .refine((v) => !!v.jobId === !!v.userId),
+      body,
+    );
+    return this.service.browserSubmission(this.session(req), input);
   }
   @Post("banks") add(@Req() req: Request, @Body() body: unknown) {
     const { stepUpId, ...input } = parse(

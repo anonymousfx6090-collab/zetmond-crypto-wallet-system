@@ -19,8 +19,27 @@ async function main() {
       running = false;
     }
   }, 5000);
+  let verificationWork: Promise<unknown> | undefined;
+  const verificationTimer = setInterval(() => {
+    if (
+      verificationWork ||
+      !runtime.verification.providers.length ||
+      config.VERIFICATION_INLINE_WORKER !== "true"
+    )
+      return;
+    verificationWork = runtime.verificationWorker
+      .dispatch()
+      .catch(() =>
+        console.warn("Verification worker unavailable; work remains saved."),
+      )
+      .finally(() => {
+        verificationWork = undefined;
+      });
+  }, 1000);
   const shutdown = async () => {
     clearInterval(timer);
+    clearInterval(verificationTimer);
+    await verificationWork;
     await runtime.close();
     process.exit(0);
   };

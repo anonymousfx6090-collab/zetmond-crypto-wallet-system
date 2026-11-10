@@ -10,7 +10,8 @@
     "admin:provision": "tsx --env-file-if-exists=.env src/provision-admin.ts",
     "test": "tsx --test --test-concurrency=1 test/*.test.ts",
     "delivery:local": "tsx --env-file-if-exists=.env src/read-local-message.ts",
-    "worker:verification": "node dist/worker.js"
+    "worker:verification": "node dist/worker.js",
+    "smile:check": "node dist/check-smile-id.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",

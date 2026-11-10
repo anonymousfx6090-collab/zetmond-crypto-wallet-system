@@ -18,10 +18,8 @@ import { AuthController } from "./auth/auth.controller";
 import { VerificationService } from "./verification/verification.service";
 import { VerificationWorker } from "./verification/verification.worker";
 import { VerificationController } from "./verification/verification.controller";
-import {
-  configuredVerificationProviders,
-  VerificationProvider,
-} from "./providers/verification";
+import { VerificationProvider } from "./providers/verification";
+import { configuredVerificationProviders } from "./providers/registry";
 @Catch()
 class SafeErrors implements ExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {
@@ -51,7 +49,7 @@ export async function createApp(
     auth = new AuthService(db, config, delivery);
   const verification = new VerificationService(
     auth,
-    testProviders || configuredVerificationProviders(),
+    testProviders || configuredVerificationProviders(config, db),
   );
   const verificationWorker = new VerificationWorker(verification);
   @Module({
@@ -75,11 +73,12 @@ export async function createApp(
   // Only registered provider routes bypass browser CSRF. Verify untouched raw bytes first.
   for (const provider of verification.providers) {
     if (provider.mode !== verification.mode) continue;
+    const route = provider.webhookRoute?.() || `/api/webhooks/${provider.id}`;
     app
       .getHttpAdapter()
       .getInstance()
       .post(
-        `/api/webhooks/${provider.id}`,
+        route,
         express.raw({ type: "*/*", limit: "64kb" }),
         async (req: Request, res: Response) => {
           try {
@@ -88,7 +87,9 @@ export async function createApp(
                 .status(400)
                 .json({ message: "Invalid verification event." });
             return res.json(
-              await verification.webhook(provider, req.body, req.headers),
+              await verification.webhook(provider, req.body, req.headers, {
+                route,
+              }),
             );
           } catch (error) {
             return res

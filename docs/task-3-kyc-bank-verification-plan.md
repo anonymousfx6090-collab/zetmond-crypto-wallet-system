@@ -1,8 +1,8 @@
 # Task 3 — KYC and bank verification plan
 
-Status: provider-neutral implementation built 6 November 2026 on `feat/task-3-kyc-bank-verification`. Identity/bank records, APIs, screens, durable jobs and BullMQ worker are implemented. Vendor integrations, live sandbox evidence and the decisions below remain outstanding. See [implementation and handoff](task-3-implementation.md).
+Status: provider-neutral implementation built 6 November 2026 on `feat/task-3-kyc-bank-verification`. Identity/bank records, APIs, screens, durable jobs and BullMQ worker are implemented. Smile ID was selected for KYC on 7 November 2026; the owner has since opened Sandbox Credentials, and the server credential/request client is prepared. Vendor integrations, real sandbox evidence, bank-provider selection and the decisions below remain outstanding. See [implementation and handoff](task-3-implementation.md).
 
-This plan follows PRD v1.1 Sections 4, 7.4–7.5, 13.3, 16.7, 17.4 and 21.1, and decisions O01, O19, O20, O22, O25 and O26. Provider selection and policies marked TBD in that PRD remain undecided.
+This plan follows PRD v1.1 Sections 4, 7.4–7.5, 13.3, 16.7, 17.4 and 21.1, and decisions O01, O19, O20, O22, O25 and O26. O19 now selects Smile ID for KYC. Bank-provider selection, country/document coverage and other policies marked TBD in that PRD remain undecided.
 
 ## Goal and existing foundation
 
@@ -26,9 +26,9 @@ Launch markets remain Nigeria/NGN, Ghana/GHS, South Africa/ZAR and Kenya/KES. Cu
 
 ## Delivery sequence
 
-### 3.1 — Choose providers and resolve integration rules
+### 3.1 — Complete Smile ID setup, choose bank verification and resolve integration rules
 
-Research KYC and bank-verification providers against a country-by-country capability matrix. Confirm supported documents, liveness, age verification, bank identifiers, account-name/ownership evidence, authenticated results, status lookup, retries, pricing, data handling and eligibility to serve Zetmond's disclosed business.
+Create the selected Smile ID account and obtain sandbox access, following [Smile ID setup](smile-id-setup.md). Validate Smile ID and candidate bank-verification providers against a country-by-country capability matrix. Confirm supported documents, liveness, age verification, bank identifiers, account-name/ownership evidence, authenticated results, status lookup, retries, pricing, data handling and eligibility to serve Zetmond's disclosed business.
 
 Prefer provider-hosted identity capture to minimize locally held documents. A bank lookup or a typed account-holder name alone must not establish ownership.
 
@@ -41,7 +41,7 @@ Record the decision matrix before committing to an integration:
 | South Africa / ZAR | TBD; confirm supported government IDs and age evidence | TBD; use the provider's South Africa-specific bank schema  | TBD                                                              |
 | Kenya / KES        | TBD; confirm supported government IDs and age evidence | TBD; use the provider's Kenya-specific bank schema         | TBD                                                              |
 
-Use current official documentation, account capabilities and sandbox evidence to fill this matrix. No provider, price or country coverage is approved by this plan. KYC and bank verification can use different providers. Bank verification is separate from choosing a fiat collection/payout provider; a standard Monnify contract must not be assumed eligible for Zetmond's crypto/P2P model.
+Use current official documentation, account capabilities and sandbox evidence to fill this matrix. Smile ID is selected for KYC; no price or country coverage has been confirmed, and no bank-verification provider has been selected. KYC and bank verification can use different providers. Bank verification is separate from choosing a fiat collection/payout provider; a standard Monnify contract must not be assumed eligible for Zetmond's crypto/P2P model.
 
 Before the affected integration is activated, resolve:
 
@@ -178,7 +178,7 @@ The dynamic webhook notation is a planning shorthand: only explicitly configured
 
 | Decision                                                   | When it blocks work                                                            |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| KYC provider, country/document coverage and sandbox access | Provider-specific capture, signature handling and verified outcomes            |
+| Smile ID account, country/document coverage and sandbox access | Provider-specific capture, signature handling and verified outcomes            |
 | Bank-verification provider and ownership/name-match policy | Account schema, trusted match results and exception handling                   |
 | Redis/worker service arrangement                           | Hosted durable background processing and restart evidence                      |
 | Retention, deletion and consent/disclosure rules           | Collection/storage of the affected identity evidence and production activation |
