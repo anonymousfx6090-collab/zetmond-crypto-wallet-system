@@ -38,7 +38,7 @@ const provider: VerificationProvider = {
   id: "fixture",
   mode: "sandbox",
   captureOrigins: ["https://capture.example.test"],
-  identityCountries: ["NG", "GH", "ZA", "KE"],
+  identityCountries: ["NG", "GH", "KE"],
   bankCountries: ["NG"],
   disclosure: { version: "fixture-v1", url: "https://example.test/disclosure" },
   bankPolicyVersion: "fixture-exact-v1",
@@ -242,6 +242,45 @@ beforeEach(async () => {
 });
 after(() => runtime.close());
 
+test("removed launch countries cannot dispatch saved identity work", async () => {
+  for (const [email, accountCountry, attemptCountry] of [
+    ["verify@example.test", "ZA", "NG"],
+    ["country-scope@example.test", "NG", "ZA"],
+  ]) {
+    const c = await customer(email);
+    await runtime.db.pool.query(
+      "UPDATE users SET email_verified=true WHERE id=$1",
+      [c.id],
+    );
+    const started = await post(
+      "identity/sessions",
+      { disclosureVersion: "fixture-v1" },
+      c.cookie,
+    );
+    assert.equal(started.status, 201);
+    await runtime.db.pool.query("UPDATE users SET country=$2 WHERE id=$1", [
+      c.id,
+      accountCountry,
+    ]);
+    await runtime.db.pool.query(
+      "UPDATE identity_attempts SET country=$2 WHERE id=$1",
+      [started.body.attemptId, attemptCountry],
+    );
+    await runtime.verificationWorker.dispatch();
+    assert.equal(starts, 0);
+    const view = await get("identity", c.cookie);
+    assert.equal(view.body.available, false);
+    assert.equal(view.body.canStart, false);
+  }
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT count(*) FROM identity_attempts WHERE status='approved'",
+      )
+    ).rows[0].count,
+    "0",
+  );
+});
 test("identity endpoints require customer login, email and current disclosure; browser cannot supply approvals", async () => {
   assert.equal((await get("identity")).status, 401);
   const c = await customer();

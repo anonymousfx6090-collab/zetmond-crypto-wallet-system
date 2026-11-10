@@ -4,6 +4,14 @@ Built 6 November 2026 on `feat/task-3-kyc-bank-verification`, based on main `e37
 
 **Status: Smile ID adapter and browser capture implemented; account-backed sandbox acceptance and bank integration remain outstanding.** The owner selected Smile ID for KYC and reported saving sandbox credentials in Render. The real adapter now has explicit `SMILE_ID_ENABLED` opt-in, default false. Deploying credentials alone keeps the unavailable state. Test adapters remain confined to automated tests and cannot be selected by environment or HTTP. The owner now targets delivery within five days; no full-scope production completion is asserted by this status.
 
+## Launch markets and bank-provider follow-up
+
+The owner removed South Africa on 9 November 2026. Nigeria/NGN, Ghana/GHS and Kenya/KES are now the only supported launch markets. A shared server market catalog drives signup metadata, registration, provisioning, verification schemas and provider eligibility. New ZA registrations, identity sessions and bank details are refused. Prior ZA records remain stored; sign-in/profile access remains available while verification, saved destination usability and financial access are denied. Old migrations remain unchanged so historical rows are readable. Queued work cannot initiate or apply an approval for a removed market.
+
+The owner reported opening the deployed verification page but had no identity document available to complete the flow. Record this as an owner-reported UI check only; document/liveness completion, callback delivery and final saved verification result remain unproven. Full Smile ID sandbox acceptance stays pending.
+
+Read [bank-provider research](task-3-bank-provider-review.md) for the inspected official SDKs, account-connection recommendation and country/ownership/business-eligibility gaps. No bank provider has been selected or activated by that research.
+
 ## Implemented
 
 - `/identity`: authenticated overview, disclosure acknowledgment, hosted-capture handoff, persisted status, correction/resubmission and explicit unavailable/restricted states. Browser return never approves a customer. Open pages refresh after focus, visibility changes and every 15 seconds.
@@ -53,12 +61,11 @@ The identity/bank UI is separate from `AccountApp.jsx` and shares its logo, them
 
 Treat bank ownership as a separate selection. A bank-account-name lookup alone is insufficient. Require verifiable evidence tied to the exact destination and verified identity, with an agreed matching policy. Do not assume an existing payment provider's contract covers crypto/P2P.
 
-| Market             | KYC provider/documents/liveness                 | Bank schema and ownership evidence                            | Enabled now |
-| ------------------ | ----------------------------------------------- | ------------------------------------------------------------- | ----------- |
-| Nigeria / NGN      | Smile ID selected; checks/documents unconfirmed | Pending provider and matching policy                          | No          |
-| Ghana / GHS        | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability | No          |
-| South Africa / ZAR | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability | No          |
-| Kenya / KES        | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability | No          |
+| Market        | KYC provider/documents/liveness                 | Bank schema and ownership evidence                            | Enabled now |
+| ------------- | ----------------------------------------------- | ------------------------------------------------------------- | ----------- |
+| Nigeria / NGN | Smile ID selected; checks/documents unconfirmed | Pending provider and matching policy                          | No          |
+| Ghana / GHS   | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability | No          |
+| Kenya / KES   | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability | No          |
 
 Before enabling a market for real customers, record supported countries/documents, minimum fields, sandbox and live account eligibility, privacy/consent wording, retention/deletion responsibility, rejection/appeal path, name matching/joint/business-account rules and costs. Bank retirement policy remains undecided. No budget is assumed; the owner has now stated a five-day delivery target.
 
@@ -104,5 +111,7 @@ Automated tests use only a dedicated local PostgreSQL database whose name ends i
 - Redis integration test destroys only its unique test queue, restarts the BullMQ worker and proves PostgreSQL work is recovered. CI provisions Redis and runs this test with `TEST_REDIS_URL`; it is explicitly skipped if the optional local Redis test URL is absent.
 - Browser tests exercise real unconfigured-provider screens at 320/390/768/1440 widths, light/dark appearance, UI contract fixtures for disclosure/review/correction/bank forms, masked results, accessible errors and revoked-session redirects. Fixtures are labeled in test code; they are **not vendor sandbox evidence**.
 - Task 2 authentication/API/browser regressions and API/customer production builds are included.
+
+Three-country scope follow-up, 9 November 2026: **139 backend checks ran: 138 passed and the optional Redis check was skipped; all 22 customer browser checks passed.** API TypeScript and customer production builds passed. Coverage includes successful NG/GH/KE registration and local currencies, rejected ZA registration and outbound token/document requests, preserved unsupported-country sign-in/profile access with financial/verification denial, and skipped queued work for a removed account or attempt country. Historical migration checks remain unchanged; no database rewrite is needed. No private `.env` was read or modified. Provider calls remain fixtures, and no bank provider is active.
 
 Actual vendor-backed capture, verification, recovery and bank ownership demonstrations are outstanding. Task 3 must not be marked complete until those pass for the enabled markets and outstanding policies are resolved. Vault remains Task 9 (second to last); admin portal Task 10 (last).

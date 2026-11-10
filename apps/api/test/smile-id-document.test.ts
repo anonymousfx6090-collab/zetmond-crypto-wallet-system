@@ -191,6 +191,7 @@ test("false/incomplete consent, invalid subject data and insecure callbacks are 
     { consent: undefined },
     { email: "invalid" },
     { country: "US" },
+    { country: "ZA" },
     { userId: "person@example.test" },
     { userId: "unknown" },
     { userId: "customer\n" },

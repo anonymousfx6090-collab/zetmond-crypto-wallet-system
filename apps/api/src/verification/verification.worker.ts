@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { seal, unseal } from "../crypto";
 import { adult, bankResult, identityResult } from "../providers/verification";
 import { VerificationService } from "./verification.service";
+import { isSupportedCountry } from "../markets";
 
 /** PostgreSQL is authoritative. Leases fence crashed workers; provider calls use the persisted
  * operation ID. This pump can be woken by BullMQ without putting customer evidence in Redis.
@@ -88,6 +89,9 @@ export class VerificationWorker {
         ).rows[0];
         const a = await s.currentAttempt(c, u.id);
         return (
+          isSupportedCountry(u.country) &&
+          isSupportedCountry(target.country) &&
+          target.country === u.country &&
           !u.restricted &&
           u.email_verified &&
           u.kyc_status !== "restricted" &&
@@ -181,6 +185,9 @@ export class VerificationWorker {
         )
           return;
         const eligible =
+          isSupportedCountry(u.country) &&
+          isSupportedCountry(target.country) &&
+          target.country === u.country &&
           !u.restricted &&
           u.email_verified &&
           u.kyc_status !== "restricted" &&

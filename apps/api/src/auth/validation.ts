@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
+import { countries } from "../markets";
 export const email = z.string().trim().toLowerCase().email().max(254);
 export const password = z.string().min(12).max(128);
 export const registerSchema = z
@@ -10,7 +11,7 @@ export const registerSchema = z
       .string()
       .max(24)
       .transform((v) => parsePhoneNumberFromString(v)?.number || v),
-    country: z.enum(["NG", "GH", "ZA", "KE"]),
+    country: z.enum(countries),
     acceptTerms: z.literal(true),
     policyVersion: z.string().max(80),
   })

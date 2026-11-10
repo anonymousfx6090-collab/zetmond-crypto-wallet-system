@@ -14,6 +14,7 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { AuthService } from "./auth.service";
 import { deploymentStage } from "../config";
+import { markets } from "../markets";
 import {
   registerSchema,
   loginSchema,
@@ -70,12 +71,7 @@ export class AuthController {
   }
   @Get("auth/policy") policy() {
     return {
-      countries: [
-        { code: "NG", name: "Nigeria", currency: "NGN" },
-        { code: "GH", name: "Ghana", currency: "GHS" },
-        { code: "ZA", name: "South Africa", currency: "ZAR" },
-        { code: "KE", name: "Kenya", currency: "KES" },
-      ],
+      countries: markets,
       termsVersion: this.auth.config.TERMS_VERSION,
       termsUrl: this.auth.config.TERMS_URL,
       privacyUrl: this.auth.config.PRIVACY_URL,

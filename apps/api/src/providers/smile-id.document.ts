@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { countries } from "../markets";
 
 // Zetmond transport budgets, not claimed Smile ID service limits. Confirm the
 // provider's limits and supported capture procedure before enabling an adapter.
@@ -40,7 +41,7 @@ const requestSchema = z
     operationId: z.string().uuid(),
     userId: smileIdUserIdSchema,
     email: z.string().email().max(254),
-    country: z.enum(["NG", "GH", "ZA", "KE"]),
+    country: z.enum(countries),
     callbackUrl: smileIdHttpsUrlSchema,
     consent: smileIdConsentSchema,
     document: z.instanceof(Blob),

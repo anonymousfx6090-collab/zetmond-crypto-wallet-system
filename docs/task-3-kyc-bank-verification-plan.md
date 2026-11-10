@@ -1,6 +1,6 @@
 # Task 3 — KYC and bank verification plan
 
-Status: provider-neutral implementation built 6 November 2026 on `feat/task-3-kyc-bank-verification`. Identity/bank records, APIs, screens, durable jobs and BullMQ worker are implemented. Smile ID was selected for KYC on 7 November 2026; the owner has since opened Sandbox Credentials, and the server credential/request client is prepared. Vendor integrations, real sandbox evidence, bank-provider selection and the decisions below remain outstanding. See [implementation and handoff](task-3-implementation.md).
+Status: identity/bank records, APIs, screens and durable processing are implemented. The Smile ID V3 adapter and V12 capture journey were merged in PR #7. The owner reported opening the deployed verification page but could not complete a document check; full sandbox capture and callback evidence remain outstanding. Bank-provider selection and integration are unfinished. The 9 November 2026 launch-market change limits support to Nigeria, Ghana and Kenya. See [implementation and handoff](task-3-implementation.md).
 
 This plan follows PRD v1.1 Sections 4, 7.4–7.5, 13.3, 16.7, 17.4 and 21.1, and decisions O01, O19, O20, O22, O25 and O26. O19 now selects Smile ID for KYC. Bank-provider selection, country/document coverage and other policies marked TBD in that PRD remain undecided.
 
@@ -12,9 +12,9 @@ Task 2 supplies registration, shared customer/admin login, email-only verificati
 
 Current hosts are `https://zetmond.vercel.app` for customers and `https://zetmond-wallet.onrender.com` for APIs. Hosting details and remaining live checks are documented in [Render staging setup](render-staging.md). Operator details, final notices and production policy approvals remain pending.
 
-Implementation is on `feat/task-3-kyc-bank-verification`, based on that `main` baseline plus the saved plan. The sections below retain the delivery requirements; the linked implementation document distinguishes completed code from outstanding provider work.
+The foundation was developed on `feat/task-3-kyc-bank-verification`; the Smile ID follow-up was merged from `feat/smile-id-client`. The launch-market follow-up is on `feat/task-3-launch-markets`. The sections below retain the delivery requirements; the linked implementation document distinguishes completed code from outstanding provider work.
 
-Launch markets remain Nigeria/NGN, Ghana/GHS, South Africa/ZAR and Kenya/KES. Customers must be at least 18 and complete government-ID plus selfie/liveness verification. Email verification is required; phone numbers remain contact data and do not require SMS verification.
+Launch markets are Nigeria/NGN, Ghana/GHS and Kenya/KES only, following the owner's 9 November 2026 removal of South Africa. Customers must be at least 18 and complete government-ID plus selfie/liveness verification. Email verification is required; phone numbers remain contact data and do not require SMS verification.
 
 ## Staging boundaries
 
@@ -34,14 +34,13 @@ Prefer provider-hosted identity capture to minimize locally held documents. A ba
 
 Record the decision matrix before committing to an integration:
 
-| Market             | ID documents and selfie/liveness                       | Bank identifiers and ownership evidence                    | Provider sandbox, authenticated results and business eligibility |
-| ------------------ | ------------------------------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------- |
-| Nigeria / NGN      | TBD; confirm supported government IDs and age evidence | TBD; confirm bank lookup and verified ownership capability | TBD                                                              |
-| Ghana / GHS        | TBD; confirm supported government IDs and age evidence | TBD; use the provider's Ghana-specific bank schema         | TBD                                                              |
-| South Africa / ZAR | TBD; confirm supported government IDs and age evidence | TBD; use the provider's South Africa-specific bank schema  | TBD                                                              |
-| Kenya / KES        | TBD; confirm supported government IDs and age evidence | TBD; use the provider's Kenya-specific bank schema         | TBD                                                              |
+| Market        | ID documents and selfie/liveness                       | Bank identifiers and ownership evidence                    | Provider sandbox, authenticated results and business eligibility |
+| ------------- | ------------------------------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------- |
+| Nigeria / NGN | TBD; confirm supported government IDs and age evidence | TBD; confirm bank lookup and verified ownership capability | TBD                                                              |
+| Ghana / GHS   | TBD; confirm supported government IDs and age evidence | TBD; use the provider's Ghana-specific bank schema         | TBD                                                              |
+| Kenya / KES   | TBD; confirm supported government IDs and age evidence | TBD; use the provider's Kenya-specific bank schema         | TBD                                                              |
 
-Use current official documentation, account capabilities and sandbox evidence to fill this matrix. Smile ID is selected for KYC; no price or country coverage has been confirmed, and no bank-verification provider has been selected. KYC and bank verification can use different providers. Bank verification is separate from choosing a fiat collection/payout provider; a standard Monnify contract must not be assumed eligible for Zetmond's crypto/P2P model.
+Use current official documentation, account capabilities and sandbox evidence to fill this matrix. Smile ID is selected for KYC; no price or country coverage has been confirmed, and no bank-verification provider has been selected. KYC and bank verification can use different providers. The [bank-provider review](task-3-bank-provider-review.md) records inspected public SDKs and current gaps. Bank verification is separate from choosing a fiat collection/payout provider; a standard Monnify contract must not be assumed eligible for Zetmond's crypto/P2P model.
 
 Before the affected integration is activated, resolve:
 
@@ -119,7 +118,7 @@ apps/api/
   src/eligibility/         Shared action-specific permission checks
   src/providers/           Selected KYC/bank integrations and webhook contracts
   src/jobs/                Durable event processing and reconciliation
-  src/worker.ts            Proposed worker entry point; not an existing command
+  src/worker.ts            Optional dedicated worker; inline API processing is available
   test/                    Database and provider-contract tests
 apps/customer/
   app/identity/page.jsx
@@ -168,7 +167,7 @@ The dynamic webhook notation is a planning shorthand: only explicitly configured
 ## Render/Vercel rollout
 
 1. Select provider sandbox accounts, callback URLs, country capabilities and data-handling rules. Record remaining commercial/production decisions without inventing defaults.
-2. Select/configure the Redis service and Render background-worker arrangement required by BullMQ. Keep PostgreSQL as the durable record of work; worker restarts and Redis interruptions must recover without losing decisions or duplicating provider operations.
+2. Use the implemented inline API verification pump for initial rollout. A later dedicated BullMQ worker can use Redis; it is optional rather than a new paid service requirement for sandbox validation. PostgreSQL owns durable work, leases and evidence in either arrangement.
 3. Apply the next additive migration (`004`, after the existing email-only migration `003`) and deploy the API/worker with supported sandbox adapters enabled. Preserve existing data and encryption keys.
 4. Redeploy the Vercel customer app with its existing Render `API_INTERNAL_ORIGIN`; verify hosted return URLs and provider webhook routing. Keys and provider session secrets stay server-side.
 5. Exercise the identity and bank journeys using supported sandbox fixtures and real provider status/signature contracts. Document observed results per market; unsupported capabilities remain unavailable and cannot be counted complete.
@@ -176,15 +175,15 @@ The dynamic webhook notation is a planning shorthand: only explicitly configured
 
 ## Decisions still needed
 
-| Decision                                                   | When it blocks work                                                            |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Decision                                                       | When it blocks work                                                            |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | Smile ID account, country/document coverage and sandbox access | Provider-specific capture, signature handling and verified outcomes            |
-| Bank-verification provider and ownership/name-match policy | Account schema, trusted match results and exception handling                   |
-| Redis/worker service arrangement                           | Hosted durable background processing and restart evidence                      |
-| Retention, deletion and consent/disclosure rules           | Collection/storage of the affected identity evidence and production activation |
-| Legal operator/contact details and final launch policies   | Real-customer launch; may remain pending during isolated sandbox development   |
+| Bank-verification provider and ownership/name-match policy     | Account schema, trusted match results and exception handling                   |
+| Redis/worker service arrangement                               | Hosted durable background processing and restart evidence                      |
+| Retention, deletion and consent/disclosure rules               | Collection/storage of the affected identity evidence and production activation |
+| Legal operator/contact details and final launch policies       | Real-customer launch; may remain pending during isolated sandbox development   |
 
-No budget, price or delivery date is assumed. Provider-neutral schema, authorization and unavailable-state screens can progress while these choices are resolved, but they do not constitute a working verification integration.
+Budget and provider prices remain TBD; the owner requested delivery within five days on 9 November 2026. Provider-neutral schema, authorization and unavailable-state screens can progress while these choices are resolved, but they do not constitute a working verification integration.
 
 ## Previewing the customer app in VS Code
 
@@ -202,4 +201,4 @@ The marketing account buttons default to the hosted customer app at `https://zet
 
 ## Completion boundary
 
-Task 3 is complete when selected providers produce verifiable outcomes for the enabled markets, correction/status recovery works, verified destinations are protected, and backend eligibility checks pass direct-access tests. Generic adapters or simulated approvals are insufficient completion evidence. Production availability still depends on the outstanding provider, privacy and operational approvals described in the PRD; no budget or delivery date is assumed.
+Task 3 is complete when selected providers produce verifiable outcomes for the enabled markets, correction/status recovery works, verified destinations are protected, and backend eligibility checks pass direct-access tests. Generic adapters or simulated approvals are insufficient completion evidence. Production availability still depends on the outstanding provider, privacy and operational approvals described in the PRD; budget remains TBD and the owner's five-day delivery request does not waive acceptance checks.

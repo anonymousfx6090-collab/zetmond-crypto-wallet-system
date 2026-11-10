@@ -47,6 +47,42 @@ test.afterAll(async () => {
   await db.end();
 });
 
+test("registration offers only Nigeria, Ghana and Kenya", async ({ page }) => {
+  await page.goto("/register");
+  const countries = page.getByRole("combobox", {
+    name: "Country",
+    exact: true,
+  });
+  await expect(countries.locator("option")).toHaveText([
+    "Select your country",
+    "Nigeria · NGN",
+    "Ghana · GHS",
+    "Kenya · KES",
+  ]);
+  await expect(countries.locator('option[value="ZA"]')).toHaveCount(0);
+});
+
+test("an existing unsupported-country account can view its profile with verification unavailable", async ({
+  page,
+}) => {
+  const email = "legacy-market@example.test";
+  await register(page, email, "+2348031234582");
+  await db.query(
+    "UPDATE users SET country='ZA',email_verified=true,kyc_status='approved' WHERE email=$1",
+    [email],
+  );
+  await page.goto("/account");
+  await expect(page.getByRole("note")).toContainText(
+    "currently supports Nigeria, Ghana and Kenya",
+  );
+  const me = await page.request.get("/api/auth/me");
+  expect((await me.json()).user.financialAccess).toBe(false);
+  await page.goto("/identity");
+  await expect(
+    page.getByRole("button", { name: "Start verification", exact: true }),
+  ).toHaveCount(0);
+});
+
 test("brand assets load, appearance persists and password visibility preserves input", async ({
   page,
 }) => {

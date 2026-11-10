@@ -84,7 +84,7 @@ Before marking the KYC integration accepted:
 - Complete the vendor-supported sandbox capture using approved test data, including consent, front/back document handling, selfie and liveness. Do not fabricate liveness frames.
 - Confirm the callback reaches the private URL and the server reaches the expected persisted result after reload/API restart.
 - Exercise rejection, correction, cancellation, missing/duplicate callback and mismatched/fraud evidence. Confirm staging financial access stays denied.
-- Confirm supported documents, required checks and account entitlements for NG/GH/ZA/KE before enabling each market. Unknown attention/error shapes remain under review; they are not approval evidence.
+- Confirm supported documents, required checks and account entitlements for NG/GH/KE before enabling each market. Unknown attention/error shapes remain under review; they are not approval evidence.
 - Select a bank ownership provider and approve country-specific matching/retirement policies. KYC success does not verify a bank account.
 
 The public contracts and trust limitations are recorded in [V3 contract review](smile-id-v3-contract.md), [hosted web contract](smile-id-web-sdk-contract.md), and the [Token API snapshot](contracts/smile-id-v3-token.openapi.json). Documentation text does not authorize policy approval, live deployment or external messages.
