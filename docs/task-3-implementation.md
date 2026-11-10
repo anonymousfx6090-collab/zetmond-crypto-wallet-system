@@ -16,7 +16,7 @@ Read [bank-provider research](task-3-bank-provider-review.md) for the inspected 
 
 - `/identity`: authenticated overview, disclosure acknowledgment, hosted-capture handoff, persisted status, correction/resubmission and explicit unavailable/restricted states. Browser return never approves a customer. Open pages refresh after focus, visibility changes and every 15 seconds.
 - `/banks`: identity/authenticator prerequisites, country-specific provider catalog/field contract, exact-operation MFA, encrypted immutable destination records, masked listings and ownership outcomes. No arbitrary customer-supplied owner name or verification flag is accepted. Retirement and editing are intentionally absent pending policy.
-- Migrations `004_identity_and_banks.sql` and `005_smile_id_capture.sql`: current case plus attempts, protected destinations, immutable decision history, authenticated event inbox and durable operation jobs. Existing customers remain unverified; there is no synthetic migration approval.
+- Migrations `004_identity_and_banks.sql`, `005_smile_id_capture.sql` and `006_bank_ownership_policy.sql`: current case plus attempts, protected destinations, immutable decision history, authenticated event inbox and durable operation jobs. Existing customers remain unverified; there is no synthetic migration approval.
 - Server checks customer role, current session, verified email, restriction, country, age 18+, government ID and liveness evidence, current attempt, provider/mode and monotonic result revision. Ordinary rejection preserves its reason without restricting the whole account. Resubmissions keep prior evidence/history.
 - Bank grants bind SHA-256 of the canonical JSON array `["bank_add", operationId, country, bankCode, accountNumber]`; details are strictly parsed/trimmed first. The existing keyed digest protects the stored grant. Grant consumption and destination/job creation share one transaction. Retrying the same committed operation returns its existing result; changing payload fails. Provider retries use the original operation ID.
 - Provider webhook routes are registered only for configured adapters. They receive raw bytes before browser CSRF/JSON middleware; adapters must authenticate signature, signed timestamp, freshness and mode. All ordinary mutations retain Origin/custom-header checks. Events deduplicate durably and schedule canonical status lookup; webhook bodies never directly set approval.
@@ -28,7 +28,7 @@ Read [bank-provider research](task-3-bank-provider-review.md) for the inspected 
 ## Actual structure
 
 ```text
-apps/api/migrations/{004_identity_and_banks,005_smile_id_capture}.sql
+apps/api/migrations/{004_identity_and_banks,005_smile_id_capture,006_bank_ownership_policy}.sql
 apps/api/src/eligibility/eligibility.ts
 apps/api/src/providers/verification.ts          # Provider contract
 apps/api/src/providers/registry.ts              # Real adapter, explicit opt-in
@@ -39,6 +39,7 @@ apps/api/src/print-smile-callback.ts             # Owner-only registration helpe
 apps/api/src/verification/verification.service.ts
 apps/api/src/verification/verification.controller.ts
 apps/api/src/verification/verification.worker.ts # Durable database work
+apps/api/src/verification/bank-ownership-policy.ts # Independent holder-name review gate
 apps/api/src/jobs/verification-queue.ts           # BullMQ wakeups
 apps/api/src/worker.ts                           # Background worker entry
 apps/customer/app/{identity,banks}/page.jsx
@@ -87,7 +88,7 @@ corepack pnpm install --frozen-lockfile --prod=false && corepack pnpm --filter @
 node apps/api/dist/migrate.js && node apps/api/dist/main.js
 ```
 
-Migrations 004 and 005 must run before the new API starts. Keep `NODE_ENV=production`, `DEPLOYMENT_STAGE=staging`, existing database/encryption key, email settings and customer `APP_ORIGIN`. Private `.env` files were neither read nor edited for this work. Customer Vercel still uses `API_INTERNAL_ORIGIN=https://zetmond-wallet.onrender.com`; redeploy the customer app to publish the new screens.
+Migrations 004, 005 and 006 must run before the new API starts. The existing start command applies them automatically; no paid Render Shell is required. Migration 006 retains historical records with null policy pins, which cannot be used until freshly verified under a current policy. Keep `NODE_ENV=production`, `DEPLOYMENT_STAGE=staging`, existing database/encryption key, email settings and customer `APP_ORIGIN`. Private `.env` files were neither read nor edited for this work. Customer Vercel still uses `API_INTERNAL_ORIGIN=https://zetmond-wallet.onrender.com`; redeploy the customer app to publish the new screens.
 
 The [Smile ID setup guide](smile-id-setup.md) gives the exact configuration and private callback registration steps. Add public `PUBLIC_API_ORIGIN=https://zetmond-wallet.onrender.com`, retain sandbox credentials/mode, register the owner-helper's private URL in Smile ID, then explicitly enable `SMILE_ID_ENABLED=true`. The private callback URL and API keys are secrets; the URL must not be shared in chat or exposed by a public endpoint. The default API pump processes PostgreSQL jobs independently of SMTP.
 
@@ -113,5 +114,9 @@ Automated tests use only a dedicated local PostgreSQL database whose name ends i
 - Task 2 authentication/API/browser regressions and API/customer production builds are included.
 
 Three-country scope follow-up, 9 November 2026: **139 backend checks ran: 138 passed and the optional Redis check was skipped; all 22 customer browser checks passed.** API TypeScript and customer production builds passed. Coverage includes successful NG/GH/KE registration and local currencies, rejected ZA registration and outbound token/document requests, preserved unsupported-country sign-in/profile access with financial/verification denial, and skipped queued work for a removed account or attempt country. Historical migration checks remain unchanged; no database rewrite is needed. No private `.env` was read or modified. Provider calls remain fixtures, and no bank provider is active.
+
+Bank ownership follow-up, 9 November 2026: independent comparison of the provider's holder name against current encrypted KYC evidence and destination-owned provider/local policy pins are implemented. Conflicting names go to review; a later authenticated revision must pass the checks again. Policy changes stop external work and cannot silently promote old records. The customer sees review/renewal states, while names and full account data remain private. These are prepared domain protections, not an active bank integration. See the [bank-provider review](task-3-bank-provider-review.md) for the current-contract network blocker and remaining provider/reverification work.
+
+Bank-policy validation: API TypeScript and customer production builds passed. **146 backend checks ran: 145 passed, one optional Redis check skipped. All 23 browser cases passed across the full run and the targeted MFA/bank-review rerun.** The admin browser test now avoids generating a TOTP immediately before expiry; server MFA validation is unchanged. Current Mono documentation access remains blocked by the cloud network policy; the saved, unactivated public-domain draft and exact remaining provider contracts are documented in the bank review. No private `.env` was read or modified, no paid service was opened and no bank provider was activated.
 
 Actual vendor-backed capture, verification, recovery and bank ownership demonstrations are outstanding. Task 3 must not be marked complete until those pass for the enabled markets and outstanding policies are resolved. Vault remains Task 9 (second to last); admin portal Task 10 (last).

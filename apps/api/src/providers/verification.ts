@@ -54,7 +54,13 @@ export const bankResult = z
     operationId: z.string().uuid(),
     mode: z.enum(["sandbox", "live"]),
     revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-    status: z.enum(["pending", "verified", "mismatch", "unavailable"]),
+    status: z.enum([
+      "pending",
+      "under_review",
+      "verified",
+      "mismatch",
+      "unavailable",
+    ]),
     evidence: z
       .object({
         ownerName: z.string().trim().min(1).max(200),

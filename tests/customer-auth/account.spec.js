@@ -390,6 +390,13 @@ test("the shared login requires admin authenticator setup before routing to prot
   await expect(
     page.getByAltText("Scan this QR code with your authenticator app"),
   ).toBeVisible();
+  // Submit well inside a TOTP interval; strict server expiry is intentional.
+  await expect
+    .poll(() => 30000 - (Date.now() % 30000), {
+      timeout: 10000,
+      message: "Wait for a fresh authenticator-code interval",
+    })
+    .toBeGreaterThan(5000);
   await page
     .getByLabel("Six-digit authenticator code", { exact: true })
     .fill(authenticator.generate(key));

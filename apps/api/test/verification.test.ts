@@ -661,6 +661,242 @@ test("bank provider evidence must bind ownership to destination, identity and ap
     409,
   );
 });
+
+async function pendingBank(c: { id: string; cookie: string }) {
+  const input = {
+    operationId: randomUUID(),
+    country: "NG" as const,
+    bankCode: "fixture-bank",
+    accountNumber: "0123456789",
+  };
+  const stepUpId = await grant(c, input);
+  assert.equal(
+    (await post("banks", { ...input, stepUpId }, c.cookie)).status,
+    201,
+  );
+  const row = (
+    await runtime.db.pool.query("SELECT * FROM bank_destinations WHERE id=$1", [
+      input.operationId,
+    ])
+  ).rows[0];
+  return { input, row };
+}
+function bankProof(
+  input: { operationId: string },
+  row: any,
+  ownerName: string,
+): BankResult {
+  return {
+    operationId: input.operationId,
+    mode: "sandbox",
+    revision: 0,
+    status: "verified",
+    evidence: {
+      ownerName,
+      ownershipVerified: true,
+      accountFingerprint: row.account_fingerprint,
+      identityAttemptId: row.identity_attempt_id,
+      policyVersion: row.provider_policy_version,
+      nameMatch: true,
+    },
+  };
+}
+test("contradictory bank owner names are held for review despite a provider match flag, and a later result is rechecked", async () => {
+  const c = await customer();
+  await approved(c);
+  const { input, row } = await pendingBank(c);
+  const proof = bankProof(input, row, "Different Holder");
+  banks.set(input.operationId, proof);
+  await runtime.verificationWorker.dispatch();
+  let view = (await get("banks", c.cookie)).body;
+  assert.equal(view.destinations[0].status, "under_review");
+  assert.equal(view.destinations[0].usable, false);
+  assert.equal(view.destinations[0].needsReverification, false);
+  assert.match(view.destinations[0].reason, /further review/);
+  assert.ok(!JSON.stringify(view).includes("Different Holder"));
+  const stored = (
+    await runtime.db.pool.query(
+      "SELECT evidence_payload FROM bank_destinations WHERE id=$1",
+      [input.operationId],
+    )
+  ).rows[0].evidence_payload;
+  assert.ok(!stored.includes("Different Holder"));
+  assert.equal(
+    unseal<any>(config.DATA_ENCRYPTION_KEY, stored).ownerName,
+    "Different Holder",
+  );
+  banks.set(input.operationId, {
+    ...proof,
+    revision: 1,
+    evidence: { ...proof.evidence!, ownerName: "Test Customer" },
+  });
+  assert.equal((await webhook(input.operationId)).status, 200);
+  await runtime.verificationWorker.dispatch();
+  view = (await get("banks", c.cookie)).body;
+  assert.equal(view.destinations[0].status, "verified");
+  assert.equal(view.destinations[0].usable, true);
+  assert.deepEqual(
+    (
+      await runtime.db.pool.query(
+        "SELECT status FROM verification_decisions WHERE target_id=$1 ORDER BY revision",
+        [input.operationId],
+      )
+    ).rows.map((r) => r.status),
+    ["under_review", "verified"],
+  );
+});
+test("matching names tolerate casing and spaces only after all independent ownership references pass", async () => {
+  const c = await customer();
+  await approved(c);
+  const { input, row } = await pendingBank(c);
+  assert.equal(row.provider_policy_version, "fixture-exact-v1");
+  assert.equal(row.name_match_policy, "zetmond-exact-name-v1");
+  banks.set(input.operationId, bankProof(input, row, " TEST  CUSTOMER "));
+  await runtime.verificationWorker.dispatch();
+  assert.equal(
+    (await get("banks", c.cookie)).body.destinations[0].usable,
+    true,
+  );
+  assert.equal(
+    unseal<any>(
+      config.DATA_ENCRYPTION_KEY,
+      (
+        await runtime.db.pool.query(
+          "SELECT details_payload FROM bank_destinations WHERE id=$1",
+          [input.operationId],
+        )
+      ).rows[0].details_payload,
+    ).accountNumber,
+    "0123456789",
+  );
+  await runtime.db.pool.query(
+    "UPDATE identity_attempts SET evidence_payload=NULL WHERE id=$1",
+    [row.identity_attempt_id],
+  );
+  const withoutIdentityProof = (await get("banks", c.cookie)).body;
+  assert.equal(withoutIdentityProof.identityVerified, false);
+  assert.equal(withoutIdentityProof.canAdd, false);
+  assert.equal(withoutIdentityProof.destinations[0].usable, false);
+});
+test("unversioned historical bank records stay unusable and are held without calling the provider or inventing a revision", async () => {
+  const c = await customer();
+  await approved(c);
+  const { input } = await pendingBank(c);
+  await runtime.db.pool.query(
+    "UPDATE bank_destinations SET provider_policy_version=NULL,name_match_policy=NULL,status='verified',revision=4 WHERE id=$1",
+    [input.operationId],
+  );
+  assert.equal(
+    (await get("banks", c.cookie)).body.destinations[0].usable,
+    false,
+  );
+  await runtime.verificationWorker.dispatch();
+  assert.equal(bankStarts, 0);
+  let row = (
+    await runtime.db.pool.query(
+      "SELECT status,revision FROM bank_destinations WHERE id=$1",
+      [input.operationId],
+    )
+  ).rows[0];
+  assert.equal(row.status, "under_review");
+  assert.equal(Number(row.revision), 4);
+  assert.equal(
+    (await post(`banks/${input.operationId}/verifications`, {}, c.cookie))
+      .status,
+    409,
+  );
+  await webhook(input.operationId);
+  await runtime.verificationWorker.dispatch();
+  assert.equal(bankStarts, 0);
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT count(*) FROM audit_events WHERE action='bank_policy_review'",
+      )
+    ).rows[0].count,
+    "1",
+  );
+});
+test("a provider-policy change cannot silently reinterpret a pending bank intent or dispatch a new check", async () => {
+  const c = await customer();
+  await approved(c);
+  const { input } = await pendingBank(c);
+  const previous = provider.bankPolicyVersion;
+  provider.bankPolicyVersion = "fixture-exact-v2";
+  try {
+    const view = (await get("banks", c.cookie)).body.destinations[0];
+    assert.equal(view.needsReverification, true);
+    assert.equal(view.usable, false);
+    assert.equal(
+      (await post(`banks/${input.operationId}/verifications`, {}, c.cookie))
+        .status,
+      409,
+    );
+    await runtime.verificationWorker.dispatch();
+    assert.equal(bankStarts, 0);
+    const row = (
+      await runtime.db.pool.query(
+        "SELECT provider_policy_version,status,revision FROM bank_destinations WHERE id=$1",
+        [input.operationId],
+      )
+    ).rows[0];
+    assert.equal(row.status, "under_review");
+    assert.equal(row.provider_policy_version, previous);
+    assert.equal(Number(row.revision), -1);
+  } finally {
+    provider.bankPolicyVersion = previous;
+  }
+});
+test("customers cannot supply matching-policy pins or turn name equality into ownership proof", async () => {
+  const c = await customer();
+  await approved(c);
+  const input = {
+    operationId: randomUUID(),
+    country: "NG" as const,
+    bankCode: "fixture-bank",
+    accountNumber: "0123456789",
+  };
+  const stepUpId = await grant(c, input);
+  assert.equal(
+    (
+      await post(
+        "banks",
+        { ...input, stepUpId, name_match_policy: "client-chosen" },
+        c.cookie,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT consumed_at FROM step_ups WHERE id=$1",
+        [stepUpId],
+      )
+    ).rows[0].consumed_at,
+    null,
+  );
+  assert.equal(
+    (await post("banks", { ...input, stepUpId }, c.cookie)).status,
+    201,
+  );
+  const row = (
+    await runtime.db.pool.query("SELECT * FROM bank_destinations WHERE id=$1", [
+      input.operationId,
+    ])
+  ).rows[0];
+  banks.set(input.operationId, {
+    ...bankProof(input, row, "Test Customer"),
+    evidence: {
+      ...bankProof(input, row, "Test Customer").evidence!,
+      accountFingerprint: "wrong-destination",
+    },
+  });
+  await runtime.verificationWorker.dispatch();
+  const view = (await get("banks", c.cookie)).body.destinations[0];
+  assert.equal(view.status, "mismatch");
+  assert.equal(view.usable, false);
+});
 test("sandbox approvals never enable staging financial access", async () => {
   const c = await customer();
   await approved(c);

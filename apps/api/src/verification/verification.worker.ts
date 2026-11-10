@@ -3,6 +3,11 @@ import { seal, unseal } from "../crypto";
 import { adult, bankResult, identityResult } from "../providers/verification";
 import { VerificationService } from "./verification.service";
 import { isSupportedCountry } from "../markets";
+import {
+  bankNamePolicyVersion,
+  bankPoliciesCurrent,
+  compareBankOwnerNames,
+} from "./bank-ownership-policy";
 
 /** PostgreSQL is authoritative. Leases fence crashed workers; provider calls use the persisted
  * operation ID. This pump can be woken by BullMQ without putting customer evidence in Redis.
@@ -100,11 +105,18 @@ export class VerificationWorker {
             : u.kyc_status === "approved" &&
               a?.id === target.identity_attempt_id &&
               a?.status === "approved" &&
+              a.country === u.country &&
+              a.mode === s.mode &&
+              !!a.evidence_payload &&
               !["inactive", "mismatch"].includes(target.status))
         );
       });
       if (!allowed) {
         await this.finish(job);
+        return true;
+      }
+      if (!identity && !bankPoliciesCurrent(target, p.bankPolicyVersion)) {
+        await this.reviewBankPolicy(job, target, p.bankPolicyVersion);
         return true;
       }
       let raw;
@@ -195,7 +207,10 @@ export class VerificationWorker {
             ? a?.id === target.id
             : u.kyc_status === "approved" &&
               a?.id === target.identity_attempt_id &&
-              a?.status === "approved");
+              a?.status === "approved" &&
+              a.country === u.country &&
+              a.mode === s.mode &&
+              !!a.evidence_payload);
         let pending = false;
         if (eligible && result.revision > Number(current.revision)) {
           if (identity) {
@@ -257,13 +272,36 @@ export class VerificationWorker {
               reason;
             if (
               status === "verified" &&
+              !bankPoliciesCurrent(current, p.bankPolicyVersion)
+            ) {
+              status = "under_review";
+              reason = "ownership_policy_changed";
+            }
+            if (
+              status === "verified" &&
               (!r.evidence ||
                 r.evidence.accountFingerprint !== current.account_fingerprint ||
                 r.evidence.identityAttemptId !== current.identity_attempt_id ||
-                r.evidence.policyVersion !== p.bankPolicyVersion)
+                r.evidence.policyVersion !== current.provider_policy_version)
             ) {
               status = "mismatch";
               reason = "ownership_mismatch";
+            }
+            if (status === "verified") {
+              const identityEvidence = unseal<
+                NonNullable<
+                  import("../providers/verification").IdentityResult["evidence"]
+                >
+              >(s.key, a.evidence_payload);
+              if (
+                compareBankOwnerNames(
+                  identityEvidence?.legalName,
+                  r.evidence?.ownerName,
+                ) !== "match"
+              ) {
+                status = "under_review";
+                reason = "owner_name_review";
+              }
             }
             if (["inactive", "mismatch"].includes(current.status)) {
               await this.finishIn(c, job, lease);
@@ -277,7 +315,9 @@ export class VerificationWorker {
                 status,
                 r.revision,
                 reason || null,
-                status === "verified" ? seal(s.key, r.evidence) : null,
+                ["verified", "under_review"].includes(status) && r.evidence
+                  ? seal(s.key, r.evidence)
+                  : null,
               ],
             );
             await c.query(
@@ -315,6 +355,70 @@ export class VerificationWorker {
       );
     }
     return true;
+  }
+  private async reviewBankPolicy(
+    job: any,
+    target: any,
+    providerVersion: string,
+  ) {
+    const s = this.service;
+    await s.db.tx(async (c) => {
+      const u = (
+        await c.query("SELECT * FROM users WHERE id=$1 FOR UPDATE", [
+          target.user_id,
+        ])
+      ).rows[0];
+      const a = u && (await s.currentAttempt(c, u.id));
+      const current = (
+        await c.query(
+          "SELECT * FROM bank_destinations WHERE id=$1 FOR UPDATE",
+          [target.id],
+        )
+      ).rows[0];
+      const lease = (
+        await c.query(
+          "SELECT * FROM verification_jobs WHERE id=$1 FOR UPDATE",
+          [job.id],
+        )
+      ).rows[0];
+      if (
+        !lease ||
+        lease.lease_token !== job.lease_token ||
+        new Date(lease.lease_until) <= new Date()
+      )
+        return;
+      if (
+        u &&
+        current &&
+        !u.restricted &&
+        u.email_verified &&
+        u.kyc_status === "approved" &&
+        isSupportedCountry(u.country) &&
+        current.country === u.country &&
+        a?.id === current.identity_attempt_id &&
+        a?.status === "approved" &&
+        a.country === u.country &&
+        a.mode === s.mode &&
+        !!a.evidence_payload &&
+        current.mode === s.mode &&
+        !["inactive", "mismatch"].includes(current.status) &&
+        !bankPoliciesCurrent(current, providerVersion) &&
+        (current.status !== "under_review" ||
+          current.reason !== "ownership_policy_changed")
+      ) {
+        // This local hold does not invent or advance a provider revision.
+        await c.query(
+          "UPDATE bank_destinations SET status='under_review',reason='ownership_policy_changed',updated_at=now() WHERE id=$1",
+          [current.id],
+        );
+        await s.auth.audit(c, u.id, "bank_policy_review", {
+          destinationId: current.id,
+          providerPolicyVersion: providerVersion,
+          namePolicyVersion: bankNamePolicyVersion,
+        });
+      }
+      await this.finishIn(c, job, lease);
+    });
   }
   private async finish(job: any) {
     await this.service.db.tx(async (c) => {

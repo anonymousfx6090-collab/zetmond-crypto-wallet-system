@@ -7,6 +7,10 @@ import { seal, unseal, digest, hash } from "../crypto";
 import { Eligibility } from "../eligibility/eligibility";
 import { countries, isSupportedCountry } from "../markets";
 import {
+  bankNamePolicyVersion,
+  bankPoliciesCurrent,
+} from "./bank-ownership-policy";
+import {
   Country,
   Mode,
   VerificationProvider,
@@ -51,6 +55,10 @@ export const reasons: Record<string, string> = {
     "The verification service has not supplied all required checks.",
   ownership_mismatch:
     "The bank ownership check did not match your verified identity.",
+  owner_name_review:
+    "The bank account holder details need further review against your verified identity.",
+  ownership_policy_changed:
+    "This bank destination needs verification under the current policy before it can be used.",
 };
 export class VerificationService {
   readonly eligibility: Eligibility;
@@ -66,6 +74,11 @@ export class VerificationService {
       ids.add(p.id);
       if (!p.disclosure.version || !p.disclosure.url.startsWith("https://"))
         throw new Error("Verification disclosure is required");
+      if (
+        p.bankCountries.length &&
+        (!p.bankPolicyVersion || p.bankPolicyVersion.length > 80)
+      )
+        throw new Error("A valid bank verification policy is required");
     }
   }
   get db() {
@@ -318,7 +331,7 @@ export class VerificationService {
       const a = await this.currentAttempt(c, u.id);
       const rows = (
         await c.query(
-          "SELECT id,bank_label,last_four,country,currency,status,reason,created_at,identity_attempt_id FROM bank_destinations WHERE user_id=$1 ORDER BY created_at DESC",
+          "SELECT id,provider,mode,provider_policy_version,name_match_policy,bank_label,last_four,country,currency,status,reason,created_at,identity_attempt_id FROM bank_destinations WHERE user_id=$1 ORDER BY created_at DESC",
           [u.id],
         )
       ).rows;
@@ -334,6 +347,7 @@ export class VerificationService {
             u.kyc_status === "approved" &&
             a?.status === "approved" &&
             a.country === u.country &&
+            !!a.evidence_payload &&
             a.mode === this.mode,
           mfaEnabled: !!u.mfa_secret,
           emailVerified: u.email_verified,
@@ -346,12 +360,27 @@ export class VerificationService {
             currency: r.currency,
             status: r.status,
             reason: reasons[r.reason],
+            needsReverification:
+              !r.provider_policy_version ||
+              r.name_match_policy !== bankNamePolicyVersion ||
+              r.mode !== this.mode ||
+              (!!p &&
+                (r.provider !== p.id ||
+                  !bankPoliciesCurrent(r, p.bankPolicyVersion))),
             usable:
+              !!p &&
+              r.provider === p.id &&
+              r.mode === p.mode &&
+              bankPoliciesCurrent(r, p.bankPolicyVersion) &&
               isSupportedCountry(u.country) &&
               isSupportedCountry(r.country) &&
               r.country === u.country &&
               r.status === "verified" &&
               r.identity_attempt_id === a?.id &&
+              a?.status === "approved" &&
+              a.country === u.country &&
+              a.mode === this.mode &&
+              !!a.evidence_payload &&
               u.kyc_status === "approved",
             createdAt: r.created_at,
           })),
@@ -472,8 +501,8 @@ export class VerificationService {
           403,
         );
       await c.query(
-        `INSERT INTO bank_destinations(id,user_id,identity_attempt_id,provider,mode,country,currency,details_payload,account_fingerprint,last_four,bank_label,operation_digest,status)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending')`,
+        `INSERT INTO bank_destinations(id,user_id,identity_attempt_id,provider,mode,country,currency,details_payload,account_fingerprint,last_four,bank_label,operation_digest,provider_policy_version,name_match_policy,status)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending')`,
         [
           input.operationId,
           u.id,
@@ -491,6 +520,8 @@ export class VerificationService {
           input.accountNumber.slice(-4),
           bank.name,
           digest(this.key, operationDigest),
+          p.bankPolicyVersion,
+          bankNamePolicyVersion,
         ],
       );
       await this.enqueue(c, input.operationId, "bank_start");
@@ -524,6 +555,8 @@ export class VerificationService {
         return fail("The bank account needs a current verified identity.", 409);
       if (!p || p.id !== b.provider || p.mode !== b.mode)
         return fail("Bank verification is currently unavailable.", 503);
+      if (!bankPoliciesCurrent(b, p.bankPolicyVersion))
+        return fail(reasons.ownership_policy_changed, 409);
       if (b.status === "mismatch" || b.status === "inactive")
         return fail("This bank destination cannot be retried.", 409);
       await this.enqueue(c, id, b.revision < 0 ? "bank_start" : "bank_sync");
