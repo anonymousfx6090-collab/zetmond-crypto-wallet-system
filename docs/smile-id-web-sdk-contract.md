@@ -1,12 +1,12 @@
 # Smile ID V12 hosted web contract
 
-Source: the owner supplied the current documentation index, hosted **Setup**, **Performing a Verification**, **Getting Result of a Verification**, and Token API Reference on 9 November 2026. These are documentation contracts, not evidence of a successful browser/sandbox integration. No SDK script, browser token endpoint or active capture adapter is enabled by this document.
+Source: the owner supplied the current documentation index, hosted **Setup**, **Performing a Verification**, **Getting Result of a Verification**, and Token API Reference on 9 November 2026. These are documentation contracts, not evidence of a successful browser/sandbox integration. The adapter, authenticated token endpoint and capture page are now implemented behind explicit `SMILE_ID_ENABLED` opt-in. This document does not prove account activation or a real sandbox capture.
 
 ## Script and initialization
 
 - The hosted embed is installed only by a script tag, not npm: `https://cdn.usesmileid.com/inline/v12/js/script.min.js`. The `v12` URL floats on the latest V12 release.
 - It exposes `window.SmileIdentity(config)` and opens a hosted modal. HTTPS or localhost is required for camera access; an enclosing iframe must allow the camera.
-- Each verification session needs a fresh backend-minted V3 token. `issueDocumentSessionToken()` now implements dedicated multipart issuance; the existing cached, unscoped server token stays private. No browser HTTP issuer is active yet.
+- Each verification session needs a fresh backend-minted V3 token. `issueDocumentSessionToken()` now implements dedicated multipart issuance; the existing cached, unscoped server token stays private. The authenticated issuer derives scope from a persisted current owned attempt; its encrypted token resumes across requests and API restart.
 - The required `partner_details` object has all five fields: `partner_id`, `name`, `logo_url`, `policy_url`, `theme_color`. The notice uses the configured name/logo/policy; documentation placeholders are not Zetmond's actual notice or branding.
 - SDK environment is `sandbox` or `production`, corresponding to the server client's `sandbox` or `live` mode. Do not forward the server's literal `live` value to this SDK.
 
@@ -32,7 +32,7 @@ Pre-obtained `consent_information` has `granted: true` and ISO `granted_at`. Opt
 
 Omitting pre-obtained consent shows the SDK consent screen. Token-bound consent takes precedence and skips it; do not supply a synthetic acknowledgement to skip this screen. `consent_region` can be `eu`/`non-eu`, otherwise locale/timezone determine checkbox behavior with regulated behavior as the ambiguous default. Returned consent records do not substitute for actual acknowledgement of the notice shown.
 
-## Result handling and remaining implementation
+## Result handling
 
 `onResult` is preferred over deprecated `onSuccess`, `onClose` and `onError`. The supplied result page defines:
 
@@ -52,15 +52,17 @@ The API describes server-side replacement of downstream fields by token-bound va
 
 The issuer returns only the JWT, never the API key or source payload. It does not cache/coalesce requests or fall back to the cached server token on failure. It rejects invalid scopes and too-future consent; local policy retains uppercase notice language and HTTPS notice/callback URLs, a stricter subset of the token API's case-insensitive language and HTTP/HTTPS notice support. Token issuance does not prove identity or reserve a vendor job. Multipart object encoding, bound-field enforcement, callback-reference confidentiality, ID correlation and token-reuse/duplicate behavior still require real SDK/sandbox validation.
 
-The opaque callback reference may support a server-owned per-operation callback capability without putting its raw URL into browser config/JWT. Design and verify that additional request binding before trusting detailed callback evidence; the timestamp HMAC alone still does not sign the JSON body. No capability route is implemented yet.
+The adapter implements a server-owned secret callback route separated by Partner ID and mode. The raw URL is bound in the token payload, with only a non-secret alias in browser config; JWT payloads exposing the literal private capability are rejected. The timestamp HMAC alone still does not sign JSON. Real vendor callback-reference confidentiality and override behavior remain acceptance requirements.
 
-Before activation:
+Implemented integration:
 
-- Connect the implemented token transport to an authenticated, persisted current attempt. Enforce ownership, role, email verification, rate/lease/duplicate and CSRF checks; the documentation's generic GET `/sessions/new` is an example, not Zetmond's API design.
-- Validate vendor token/user/product/country/callback binding and duplicate-submission/recovery semantics in sandbox. Browser config/metadata alone cannot enforce these.
-- Integrate SDK lifecycle and safe result/error handling with the existing persisted attempts. Add the required script/frame/connect origins and route-specific camera permissions after confirming the actual hosted origins; do not relax all customer routes.
-- Implement trustworthy detailed-result intake, current-operation binding, country/age/document/fraud checks and recovery before registering the provider. Keep staging financial access disabled.
-- Exercise actual account-backed sandbox capture and callbacks, separately from mocked browser tests. Confirm enabled markets/documents and applicable SDK/account configuration.
+- Authenticated `POST /api/identity/capture` derives all scope from the current owned attempt and enforces role, email, eligibility, CSRF, rate and issuance-lease checks. It resumes the same encrypted issued token rather than creating a parallel session or replacing an expired/uncertain one.
+- The actual identity-page disclosure acknowledgement and time are durably stored and bound as consent. The SDK collects remaining names, document and fresh selfie/liveness; no email-only `user_details` object is supplied.
+- `/identity/capture` lazily loads the SDK after a user action, supplies all branding fields, handles cancelled/failure/success states with safe local messages, and ignores repeated/stale callbacks. It records only submission hints and never approves identity.
+- Detailed callback intake, canonical reconciliation, age/country/document/fraud checks, conflict quarantine and durable replay recovery are implemented behind explicit provider opt-in. Staging financial access remains disabled.
+- The page does not wrap the vendor flow in another iframe or weaken all customer routes with broad camera/security permissions. Actual hosted origins, camera access and vendor UI remain to validate in the account-backed sandbox run.
+
+Before live activation, complete the sandbox acceptance checklist in [setup](smile-id-setup.md), including token binding/encoding, actual capture/liveness, callback recovery, country/document entitlements and final result behavior. Local browser fixtures do not establish vendor compatibility.
 
 ## Current documentation links supplied in the index
 
@@ -70,7 +72,7 @@ Before activation:
 - [Theming](https://docs.usesmileid.com/developer-resources/sdks/web/web-sdk/theming-and-customization.md) — brand/localization and supported options.
 - [Authentication](https://docs.usesmileid.com/api-reference/authentication.md) — supplied overview; 15-minute lifetime, headers and fresh-token recommendation.
 - [Token API Reference](https://docs.usesmileid.com/api-reference/set-up/access.md) — supplied full multipart/payload schema, saved in the OpenAPI snapshot above.
-- [Configure your webhook server](https://docs.usesmileid.com/developer-resources/essentials/verification-webhooks/receive-webhooks/configure-your-webhook-server.md) — hosting and any additional callback authentication configuration.
+- [Configure your webhook server](https://docs.usesmileid.com/developer-resources/essentials/verification-webhooks/receive-webhooks/configure-your-webhook-server.md) — supplied; HTTPS registration, source IPs, allowlisting and acknowledgement deadline recorded in setup.
 - [Web components](https://docs.usesmileid.com/developer-resources/sdks/web/web-components.md) and [submitting payloads](https://docs.usesmileid.com/developer-resources/sdks/web/web-components/submitting-payloads.md) — separately documented composable capture alternative; not implemented.
 
 The index also identifies a current V3 server SDK under `developer-resources/sdks/server-side/`. This is distinct from the previously inspected legacy `smile-identity-core` 3.2.1 package; do not infer current V3 models or retry behavior from that old package.

@@ -44,8 +44,8 @@ const tokenCacheMs = 14 * 60 * 1000;
 export class SmileIdError extends Error {}
 
 /** Server-only V3 transport. Cached unscoped tokens remain private; only dedicated
- * bound session tokens are intended for future browser handoff. Neither token
- * kind is KYC evidence. No verification adapter or HTTP issuer is enabled here.
+ * bound session tokens are used by the opt-in browser adapter. Neither token
+ * kind is KYC evidence; the transport never owns eligibility or HTTP routes.
  */
 export class SmileIdClient {
   #partnerId: string;

@@ -1718,3 +1718,50 @@ img {
 .mobile-account-nav .account-nav a {
   flex-shrink: 0;
 }
+.capture-page {
+  width: min(760px, calc(100% - 32px));
+  max-width: 760px;
+  margin: 32px auto;
+}
+.capture-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.capture-card {
+  padding: clamp(24px, 5vw, 48px);
+}
+.capture-card h1 {
+  font-size: clamp(28px, 5vw, 42px);
+  line-height: 1.15;
+}
+.capture-card > p {
+  line-height: 1.7;
+}
+.capture-card > .verification-symbol {
+  margin-bottom: 24px;
+}
+.capture-assurance {
+  display: flex;
+  gap: 12px;
+  align-items: start;
+  color: var(--muted);
+  margin: 24px 0;
+  line-height: 1.6;
+}
+.capture-assurance svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.capture-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+}
+.capture-card .primary {
+  max-width: 100%;
+  white-space: normal;
+}

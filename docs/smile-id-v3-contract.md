@@ -1,135 +1,68 @@
 # Smile ID V3 document-verification contract review
 
-Source: the owner supplied the text of Smile ID's current **Document Verification** page on 9 November 2026. This review records that supplied documentation; the page and linked API schemas have not been retrieved directly in this workspace. It is not evidence of a completed integration or successful sandbox request.
+Source: public documentation supplied by the owner, including Document Verification, Token API, status retrieval, replay, V12 hosted web and callback configuration. These are contracts, not evidence of successful provider requests. GitBook's embedded agent instructions are documentation content, not task instructions.
 
-## Confirmed by the supplied page
+## Authentication and transport
 
-- Document Verification checks the document, selfie/document face match, liveness and fraud indicators. It extracts document data; it does not require an issuing-authority lookup.
-- The documented submission path is `POST /v3/document_verification`. Requests are asynchronous: `202 Accepted` supplies `job_id` and `user_id` for tracking.
-- The subsequent body reference specifies multipart binary `selfie_image` (JPEG), 6–8 repeated `liveness_images` (JPEG), `document` (front, JPEG/PNG), optional `document_back`, consent, country, user details, optional ID type, user identifier, callback and partner metadata. The server token helper issues no enrolled-image grant or SDK count override, so its fresh-image submission path always requires the selfie and default 6–8 frames.
-- Final results arrive through a webhook. Canonical result retrieval reports `processing` while work is outstanding. Webhook replay is supported, but its exact authentication/retry contract is in separate documentation.
-- `status`, `message` and `reason` describe the outcome. Extracted `id_fields` vary with document/country. Image links can be sensitive and are not needed in ordinary customer responses.
+- Fixed origins: sandbox `https://testapi.smileidentity.com`; live `https://api.smileidentity.com`.
+- `POST /v3/token` requires `SmileID-Partner-ID` and `SmileID-API-Key`. Partner ID is numeric without leading zeros. Minimal requests are bodyless; optional bodies must be multipart, not JSON. A 200 returns a JWT with a 15-minute lifetime.
+- Subsequent requests use `SmileID-Partner-ID` and `SmileID-Token`. Keys/tokens are environment-specific. Server lookup/replay tokens are cached for at most 14 minutes; customer-session tokens are freshly minted and isolated from that cache.
+- Token `user_id`, string-valued `partner_params`, `product` and nested `payload` bind a session. Payload fields override matching downstream browser values. PII becomes `pii_` references; callback URL becomes an opaque `callback_` reference. Country and consent remain in clear. The [supplied OpenAPI snapshot](contracts/smile-id-v3-token.openapi.json) preserves the detailed schema.
+- The issuer fixes product to `document_verification` and binds stored operation, subject, country, verified email, private callback and genuine consent. `use_enrolled_image` and `allow_new_enroll` grants are not supported or synthesized. Optional names/ID type remain optional.
+- Consent requires true `granted`, ISO `granted_at`, two-letter language and privacy notice URL. The local subset requires uppercase language/HTTPS and permits at most one minute of future clock skew.
+- Native FormData serializes object parts as JSON text. Actual vendor acceptance and enforcement of these bindings still need a sandbox test. Redirects are rejected, reads bounded and requests time-limited. Raw errors/credentials are discarded.
 
-The owner also supplied these required headers from the V3 verification reference:
+## Document submission
 
-| Header               | Documented value                         |
-| -------------------- | ---------------------------------------- |
-| `SmileID-Partner-ID` | The partner identifier.                  |
-| `SmileID-Token`      | An access token returned by `/v3/token`. |
+`POST /v3/document_verification` accepts JPEG selfie, 6–8 JPEG liveness frames, JPEG/PNG document front, optional back, consent, country, user details, callback and metadata. The local direct-upload transport supports fresh images only; encrypted SDK packages/enrolled-selfie grants are not implemented. The integrated browser path uses Smile ID's actual hosted capture and upload flow.
 
-The owner subsequently supplied the token contract:
+A 202 body contains `status: accepted`, generated `job_id`, `user_id`, message and time. Acceptance is not identity approval. Job IDs use `^job_[0-9a-hjkmnp-tv-z]{26}$`. The internal Zetmond UUID remains separate from the vendor job ID. The token/REST contract permits a partner-provided stable user ID; its exact round-trip must be confirmed with the real hosted account.
 
-- `POST https://testapi.smileidentity.com/v3/token` for sandbox, and `POST https://api.smileidentity.com/v3/token` for production.
-- Required `SmileID-Partner-ID` and `SmileID-API-Key` headers. The Partner ID must be numeric without leading zeros. The documented minimal curl request is bodyless, with `Accept: application/json`.
-- A body is optional. If sent, it must be `multipart/form-data`; JSON may return `415`. The owner supplied the full OpenAPI definition of `user_id`, string-valued `partner_params`, product enum, enrolled-image/re-enrolment grants and nested `payload`; the [public snapshot](contracts/smile-id-v3-token.openapi.json) preserves it without the surrounding documentation instructions.
-- Success: HTTP `200`, `{ "token": "<JWT>" }`. Lifetime: 15 minutes. Tokens are environment-specific and go in `SmileID-Token` on subsequent requests with the partner ID.
+Direct-upload budgets are local guards: 10 MiB/image, 40 MiB total, 16 KiB/metadata part. They are not documented provider limits or evidence that bytes are valid images. The direct transport never automatically retries a document request. `not_submitted` differs from an unknown dispatched outcome; a 404 or malformed response cannot justify creating another job.
 
-The authentication overview recommends a fresh token per verification. The client now requests fresh tokens for new document submissions and separately for `issueDocumentSessionToken()`. Only server lookup/replay tokens are cached. Dedicated document-session issuance is multipart, uncached and never coalesced across customers; it does not fall back to the server cache. No real credential/token was provided in chat, and fixture tests do not prove live authentication.
+## Status and replay
 
-The session issuer fixes product to `document_verification`, binds user/operation references and supplies country, verified email and HTTPS callback in `payload`, with optional consumer-stated names, ID type and genuine consent. The token contract says payload fields override matching downstream browser fields; PII becomes `pii_` references and callback URL a `callback_` reference in the JWT. Grants to use an enrolled selfie or replace one default false and are not accepted by the local issuer. A full optional consent object is required when supplied, and consent more than one minute in the future is rejected. Local notice policy retains HTTPS and uppercase language, a stricter subset of the Token API's HTTP/HTTPS and case-insensitive language support.
+`GET /v3/status/{jobId}` returns flat JSON: `{status, job_id, user_id, message, created_at}`. HTTP 202 is processing; 200 is terminal clear/block/attention/error. `created_at` is status-response generation time, not a decision version. The client validates exact expected job/user and HTTP/body agreement. A 404 can mean missing job or wrong partner/user. No lookup result contains detailed identity evidence; terminal clear alone never approves KYC.
 
-The helper returns only the credential JWT, never the API key or source payload. It adds no browser HTTP issuer, persisted session lifecycle, SDK script or active adapter. The future endpoint must derive every scope from an authenticated current attempt and enforce ownership, eligibility, CSRF, rate/lease/duplicate limits and private callback association before exposing a session. Native FormData uses JSON text for structured parts; vendor SDK/sandbox confirmation of encoding, actual field enforcement and duplicate behavior remains required.
+`POST /v3/replay/{job_id}` requeues a completed verification's callback. The implemented transport preflights matching terminal status and sends one bodyless request, retaining the stored callback. Optional multipart callback override is deliberately not exposed. A bound 202 acknowledgement means queued delivery only. Known rejection/409 is `not_queued`; lost, unexpected or malformed responses are `unknown`. Neither automatically repeats the POST or starts another verification.
 
-## Submission and consent supplied by the owner
+## Callback contract and independent authentication
 
-The submission body uses JPEG selfie and 6–8 JPEG liveness images, JPEG/PNG document front and optional back. `user_details` needs email or phone; the current server transport implements the email path. It requires a stable partner user ID, explicit HTTPS callback and launch-country code rather than relying on generated identifiers or an account-default callback. Optional ID type is omitted unless explicitly selected.
+Callbacks are JSON POSTs. Document results include product `document_verification`, status, reason, created/completed times, provider references in `partner_params`, extracted `id_fields`, optional fraud/consent records and sensitive images/device details. The hosted/token documentation says per-session partner metadata is echoed; the adapter requires its server-bound operation ID and independently checks stable user ownership and canonical job status.
 
-Consent fields are `granted: true`, `granted_at` (ISO datetime), `notice_language` (two uppercase letters), and `notice_privacy_policy_url` (HTTPS). The future adapter must derive these from an actual, durable user acknowledgement and the notice shown, not arbitrary browser-supplied values.
-
-A 202 response has `status: accepted`, `message`, generated `job_id`, `user_id` and `created_at`. The client validates tracking fields, checks the returned user, and preserves the generated job ID separately from the internal UUID operation ID. It returns only acceptance metadata, never an approval or arbitrary provider details.
-
-The client sends `partner_params.zetmond_operation_id` for correlation. This is **not a confirmed provider idempotency mechanism**. Intents and provider job references must be persisted by the future adapter. Token failure/input rejection is distinguished from an uncertain dispatched operation; no document request is automatically replayed, including after a 401. A valid job ID in a malformed/mismatched acknowledgement is retained on the uncertainty error for reconciliation.
-
-Structured multipart fields are currently serialized as JSON text using native FormData. The supplied descriptions do not include an actual multipart curl example or object-part encoding rules; confirm this encoding and the full `user_details` schema in vendor examples/sandbox before activation. Original image filenames are replaced by generic role names.
-
-Zetmond's provisional outbound budgets are 10 MiB per image, 40 MiB total image bytes and 16 KiB per JSON metadata field. These are **local transport guards, not documented Smile ID limits**. Basic MIME/byte-signature checks do not prove a valid image, liveness or identity. Provider image size/quality limits and a supported capture procedure remain to confirm. Encrypted SDK packages, enrolled-selfie grants, SDK count overrides and telemetry are not implemented in this fresh-image method.
-
-| Vendor disposition | Required Zetmond handling                                                                                                                                                                                                                        |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `clear`            | Consider approval only after the authenticated result is bound to the current operation and required identity evidence, country and minimum age are validated. A status string alone is insufficient.                                            |
-| `attention`        | Keep financial eligibility blocked. Account settings can allow expired documents or underage results to reach this disposition; Zetmond must still enforce its own requirements. Review/correction policy must not silently approve these cases. |
-| `block`            | Do not approve the verification. Preserve the vendor reason and case history. An outcome must not silently turn into a blanket Zetmond account restriction.                                                                                      |
-| `error`            | Treat verification as incomplete, not proof of an invalid identity. Reconcile the existing operation and follow documented retry/correction rules before submitting anything again.                                                              |
-
-The documented reasons include age/expiry, document-copy and risk signals, face/liveness/document failures, unsupported documents and technical/image-processing failures. Unknown reason codes must never create an approval. Raw provider messages and image URLs must not be exposed automatically.
-
-## Result-retrieval reference supplied by the owner
-
-The owner supplied the sandbox URL `https://testapi.smileidentity.com/v3/status/{jobId}`. The path identifier has the exact pattern `^job_[0-9a-hjkmnp-tv-z]{26}$`; the example is `job_01h2xcejqtf2nbrexx3vqjhp41`. The submission acknowledgement parser now validates job references with that pattern. Authentication uses the V3 token described above.
-
-- HTTP `200` means the verification has reached a terminal state: `clear`, `block`, `attention` or `error`. It does not by itself mean the customer passed KYC.
-- HTTP `202` means the verification is still processing.
-- HTTP `400` indicates an invalid job ID; `401` missing/invalid authentication; `403` an IP-allowlist rejection; and `500` an internal provider error. These are not identity decisions.
-- HTTP `404` may mean the job does not exist, belongs to another partner, or belongs to a different token-bound user. It is not proof that an earlier uncertain submission never happened and must not trigger blind resubmission.
-
-The owner then supplied a `JobStatusResponse` description with `status`, `job_id`, `user_id`, `message` and `created_at`. Its status enum is `clear`, `block`, `attention`, `error`, `processing`, or `not_found`, corresponding to HTTP 200/202/404 as above. `created_at` is when the **status response was generated**; it must not be treated as the job creation time, identity-verification time or an immutable decision revision.
-
-The reference separately labels `Headers` with `api_version`, `job_id` and `user_id` (`unknown` when not found), and `Response` with the status description. The owner subsequently supplied the actual processing example: it is a **flat JSON object**, not a `Headers`/`Response` wrapper. Its fields match `JobStatusResponse`. The example curl has no body or explicit method, so it uses **GET**. The client's existing redirect rejection remains in place instead of following the example's `-L` redirects with credentials.
-
-`getVerificationStatus({ jobId, userId })` now validates the stored expected references before requesting `GET /v3/status/{jobId}` from the fixed environment origin. It requires an exact job/user match in the flat body, a valid response-generation timestamp and agreement between HTTP status and the body disposition. It returns only tracking fields, with a `processing` or `terminal` phase, and discards raw messages and extra data. A 401 invalidates only the rejected token without replaying the lookup; 404 and other failures retain the existing operation rather than creating a replacement. No public status/token route or automatic polling loop is added.
-
-The supplied status fields do not include extracted identity data or individual document/face/liveness checks. This lookup therefore does **not** produce a KYC decision, even for `clear`. The owner has now supplied a detailed webhook example below; its authentication and recovery contract are still required before approval logic or an adapter can be activated. Do not assume the status endpoint returns undocumented identity fields.
-
-## Document Verification webhook example supplied by the owner
-
-The owner supplied an example JSON payload from **Webhook Types — Document Verification**. This is a documentation example, not a received/authenticated callback or completed sandbox verification.
-
-- The top level has `status`, `message`, nullable `reason`, `product: document_verification`, `created_at` and `completed_at`.
-- Provider references are in `partner_params.job_id` and `partner_params.user_id`. The example does not echo `zetmond_operation_id`; use the durably stored provider-job/user mapping, not an assumed metadata echo, to find the internal operation.
-- `id_fields` includes first/other/last/full name, ID number/type, country, DOB, issuance/expiration dates, deceased status, address and other optional/null fields. These are distinct from `user_provided_info`, which contains consumer-stated names/contact details and must not substitute for extracted identity evidence.
-- `antifraud.fraud_risk` has `risk_indicators`, `risk_level`, `risk_score` and indicator details. `antifraud.smile_secure` has its own `status`, message and suspect users; `antifraud.summary` has `fraud_detected` and `fraud_sources`.
-- `kyc_receipt` and `image_links` contain private result-document/image URLs. The example also includes device/fingerprint/location/network information and a detailed returned consent record. These are not ordinary customer response fields; retention and any necessary encrypted storage must be deliberate.
-
-The example combines **`status: clear`, `risk_level: high`, `risk_score: 100` and populated risk indicators**, while `fraud_detected` is false and Smile Secure is clear. Do not discard those conflicting signals or approve from the top-level status alone. The country `XX` and all identities/URLs are documentation placeholders, not evidence for an enabled launch market. No risk-score threshold or live approval policy is established by this example.
-
-The returned consent uses `schema_version: ISO27560-v1`, record/principal IDs, language, privacy notice, events and purposes. It is distinct from the four-field request consent. Its example controllers, lawful bases, jurisdictions and retention periods do not establish Zetmond's policy or prove an actual user acknowledgement.
-
-The body example contains no webhook authentication headers, signed timestamp, event ID, environment marker or monotonic decision revision. The owner subsequently supplied the V3 authentication/delivery reference below. Payload timestamps and arrival order still do not establish authenticity, freshness or revision ordering. Obtain required/nullable field definitions and examples for attention/block/error before writing a complete normalizer. Do not manufacture government-ID/liveness evidence flags from this single sample.
-
-The callback route, result normalizer and active adapter remain unimplemented. The existing configured-provider registry stays empty; recording this example enables no eligibility or account access.
-
-## Webhook signature and delivery reference supplied by the owner
-
-The current V3 receive-webhooks reference states that results arrive as JSON in an HTTP POST. It gives this exact formula, with the literal API key used to generate the **original verification token** as the HMAC key:
+The supplied proof is exactly:
 
 ```text
-Base64(HMAC-SHA256(api_key, Response-Timestamp + partner_id + "sid_request"))
+Base64(HMAC-SHA256(original_token_api_key, Response-Timestamp + partner_id + "sid_request"))
 ```
 
-`Response-Signature` carries that Base64 digest and `Response-Timestamp` the ISO timestamp used verbatim in the calculation. Additional headers are `smileid-job-id`, `user-id`, `Api-Version` and `Content-Type: application/json`.
+Headers include `Response-Signature`, `Response-Timestamp`, `smileid-job-id`, `user-id`, `Api-Version` and Content-Type. The timestamp is signed verbatim. The local checker enforces single-valued headers, canonical Base64, constant-time comparison and a five-minute clock-skew window. Stored credential digest/mode selects the original API key; an optional previous key supports outstanding jobs during rotation.
 
-The documented formula does **not** include raw JSON, job/user IDs or an environment marker. It therefore does not provide a signature over those values, despite the reference's general description of payload integrity. A captured valid proof is unchanged if those values change. Never use this HMAC alone to trust callback identity fields or approve KYC. Detailed evidence needs a trusted canonical source or an independently verified callback mechanism that binds it to the operation. The existing body-free status lookup does not supply that detailed evidence.
+**The formula does not bind JSON, job/user IDs or mode.** The low-level helper therefore returns only a reconciliation signal. The integrated adapter additionally requires an unguessable HTTPS callback route capability derived from a protected secret and separated by Partner ID/mode. The URL is bound inside the vendor token payload, never sent as raw browser configuration. The adapter rejects JWT payloads exposing the literal private capability. Its confidentiality, the supplied vendor token override behavior, HTTPS and trusted ingress are essential assumptions; logs and dashboard access must protect it. HMAC alone remains insufficient.
 
-`SmileIdClient.verifyWebhookSignal()` implements the documented calculation with constant-time digest comparison, canonical Base64 validation, case-insensitive single-valued headers and a **local five-minute clock-skew window**. The exact timestamp string is signed without normalization. Known job/user references must match stored expectations. These references are reconciliation locators, not HMAC-bound evidence; mode is supplied by the configured client, not authenticated from the callback. Original job credentials and mode must remain available when keys rotate.
+Authenticated callback projections are encrypted and committed with the durable event/job before acknowledgement. Photos, private result/receipt URLs, ID numbers, address, contact and device/GPS data are not retained by this adapter. Mutable receipt URLs do not affect deduplication. Callback bodies never directly update customer eligibility: the worker must confirm the same current canonical job/user/status and the stored attempt's scope.
 
-The helper returns only `purpose: reconcile_only`, configured mode, job/user references, signed time and a local deterministic deduplication key. It accepts no raw body, grants no eligibility and is not wired into `VerificationProvider.authenticateWebhook` or an HTTP route. A future durable inbox must deduplicate and schedule authenticated canonical lookup; the freshness window is not durable replay protection. The helper does not store notification state or prove live vendor compatibility.
+Smile ID retries three times after the initial attempt, immediately after failure/non-2xx, for four total attempts; a 2xx must arrive within 35 seconds. Order is not guaranteed. Owner/Admin registers environment-specific HTTPS callbacks in Developer → Security Settings → Callback URLs. See [setup](smile-id-setup.md) for the private helper, edge IPs and allowlisting. The app does not trust forwarded client IP headers.
 
-The reference specifies up to three retries after the first attempt (four total), enqueued immediately after failure/non-2xx. A server must respond within **35 seconds**. Successful 2xx stops retries; after exhaustion, recovery requires requesting webhook resend. The reference describes at-least-once delivery and no guaranteed ordering across completed jobs. Design for duplicates, out-of-order arrivals and missing results after the retry budget; acknowledge only after a durable record is committed.
+## Decision and recovery policy
 
-The owner also supplied **Resend Webhook** and its linked **Replay a Verification Webhook** OpenAPI contract. Replay is `POST /v3/replay/{job_id}` at the sandbox/production API origin, authenticated with `SmileID-Token`. It is valid only for terminal clear/block/attention/error jobs. A body is optional; when present it must be multipart with optional `callback_url` override subject to the partner allowlist. JSON/other body content types receive 415. A bodyless request uses the stored callback.
+The supplied example combines clear with high risk, score 100 and populated indicators, despite a false fraud summary and clear Smile Secure. It also uses placeholder country XX. These are not approval evidence.
 
-Success is `202` with required `status: accepted`, `job_id`, `user_id`, `message`. It queues delivery; it is not a detailed-result response or proof that the callback was received. Declared errors are 400 (invalid reference/product/callback), 401 (authentication), 403 (allowlist/security), 404 (missing job/wrong partner or user/missing reference), 409 (not yet terminal), 415 (body format) and 500. The replay schema's `[0-9a-z]{26}` pattern is broader than the canonical TypeID pattern from status retrieval; the client preserves the stricter shared TypeID format.
+| Result                                                                                                                                | Handling                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Matching authenticated clear with complete extracted name/DOB/country, adult age, valid available dates and no supplied adverse fraud | Eligible for a sandbox/live identity decision in the stored mode; stage gates still apply |
+| Clear with adverse/contradictory risk, missing identity, unknown reason or unexpected data                                            | Under review                                                                              |
+| Underage or country mismatch                                                                                                          | Rejected with safe reason                                                                 |
+| Known expiry/unreadable/unsupported-document reason                                                                                   | Correction required                                                                       |
+| Block                                                                                                                                 | Rejected; no automatic blanket account restriction                                        |
+| Attention/error without a known correction reason                                                                                     | Under review                                                                              |
+| Canonical status and detailed callback disagree                                                                                       | Under review and durable replay recovery                                                  |
+| Different authenticated cores or jobs for one attempt                                                                                 | Quarantined for review, including after an earlier approval                               |
 
-`replayVerificationWebhook({ jobId, userId })` now validates stored references, obtains fresh canonical status and requests one bodyless replay only for a matching terminal job. It uses fixed API origins, a deadline and the bounded response reader. Callback overrides are not exposed. Acknowledgement must match both references and satisfy the documented response shape; raw messages and extra data are discarded. A 401 invalidates the rejected token without automatic replay. Declared client errors/409 are `not_queued` for this request; transport failures, server/unexpected HTTP results and invalid acknowledgements are `unknown` and require reconciliation before another POST. Neither outcome proves anything about the original verification or an earlier replay.
+Missing expiration is permitted for nonexpiring documents; an available expired date is rejected. Clear Document Verification is interpreted according to the supplied product contract as document authenticity/face/liveness success only after all independent checks pass. Unknown full schemas/dispositions do not receive synthetic approval flags.
 
-The future adapter must persist/rate-limit replay intents and reconcile uncertain delivery; this stateless transport does not deduplicate explicit calls or prove receipt. It creates no new verification, route or replay worker. Timestamp/key behavior on retries/resend and trustworthy detailed-result recovery remain outstanding.
+There is no vendor revision in the supplied contract. Adapter revisions belong to encrypted local checkpoints and increment only when normalized content changes; provider timestamps/arrival order never order conflicting approvals. Retries reuse the stored operation. One replay intent is persisted per attempt/job/terminal disposition; expired running/uncertain replay dispatches are held rather than blindly repeated. Explicit support resolution and vendor finality/amendment semantics remain to establish for quarantined cases.
 
-## Existing code boundary
+## Remaining vendor evidence
 
-`src/providers/smile-id.client.ts` now implements **V3 server token authentication** from the supplied contract, replacing the preliminary V1 signing/web-token/job-status methods. Fresh document/session token issuance, multipart submission, acceptance tracking, bound job-status retrieval, a timestamp-HMAC notification check and guarded callback replay are implemented from the supplied references. Detailed webhook fields, delivery rules and SDK result union are recorded; trustworthy result processing/recovery and browser capture integration remain outstanding. Do not register an active provider based on token acquisition, terminal status or the notification proof alone.
-
-The generic Task 3 backend already supports durable work, independently authenticated provider callbacks, canonical reconciliation, owner protection, case history and eligibility checks. These remain integration points; no Smile ID adapter is active. Storing Render credentials does not establish authentication or completed KYC.
-
-## Remaining reference pages
-
-The supplied page links to these current documentation resources:
-
-1. **Perform a Document Verification** — `/api-reference/products/document-verification/perform-a-document-verification.md`: body, consent and acceptance descriptions have been supplied. Still obtain the actual multipart example/object encoding, complete `user_details` schema, image quality/size limits and error/retry semantics. Confirm idempotency and recovery after an uncertain submission.
-2. **Retrieve a Verification Result** — `/api-reference/core-resources/verification-status/retrieve-a-verification-result.md`: GET path, exact job-ID format, token authentication, HTTP outcomes, status fields and flat processing example have been supplied and implemented as tracking. Still establish how to obtain detailed identity evidence, product binding and any decision-version/reconciliation guarantees. The supplied status schema does not itself contain name/DOB/country or check evidence.
-3. **Webhook Types — Document Verification** — `/developer-resources/essentials/verification-webhooks/webhook-types/document-verification.md`: detailed example, timestamp-HMAC authentication and delivery rules have been supplied. Still obtain required/nullable schemas for each disposition. Establish trustworthy identity-result binding, conflicting-fraud handling and canonical recovery/revision guarantees before approval mapping.
-4. **Resend Webhook** — `/developer-resources/essentials/verification-webhooks/receive-webhooks/resend-webhook.md` and linked **Replay a Verification Webhook** at `/api-reference/core-resources/replay-webhook/replay-a-verification-webhook.md`: supplied and implemented as guarded bodyless replay. Timestamp/key behavior on retries/resend and full-result recovery remain outstanding.
-5. **Verify with Document** — `/id-coverage/verify-with-document.md`: supported documents/checks per launch market and applicable account/sandbox capability.
-
-The owner supplied the current index, V12 hosted-web setup/verification/result pages and full token schema. See the [hosted web contract](smile-id-web-sdk-contract.md) for script URL, exact product alias, branding, consent/user-details and result-union rules. Fresh bound token transport is implemented; its authenticated endpoint, persisted session/callback association, SDK integration and actual sandbox evidence remain outstanding. The cached unscoped server token must not be sent to browsers.
-
-Bank-verification selection, Redis/worker hosting and actual provider-backed sandbox journeys remain outstanding. Staging financial access stays disabled.
+The adapter and browser integration are implemented behind explicit opt-in. Fixtures prove local behavior, not provider compatibility. Actual token multipart encoding, callback confidentiality/override, user/operation binding, 35-second ingress response, retry timestamp behavior, country/document entitlements and full sandbox outcomes remain to validate. Production privacy/retention, appeal handling and bank ownership integration are also outstanding. See [Task 3 status](task-3-implementation.md). Staging financial access stays disabled.

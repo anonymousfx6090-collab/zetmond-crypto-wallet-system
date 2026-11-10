@@ -40,7 +40,16 @@ export class VerificationWorker {
       );
       return row;
     });
-    if (!job) return false;
+    if (!job) {
+      for (const p of s.providers)
+        if (
+          p.mode === s.mode &&
+          p.dispatchRecovery &&
+          (await p.dispatchRecovery())
+        )
+          return true;
+      return false;
+    }
     try {
       const identity = job.kind.startsWith("identity");
       const target = identity
@@ -134,7 +143,13 @@ export class VerificationWorker {
       if (identity && "capture" in result && result.capture) {
         const url = new URL(result.capture.url);
         if (
-          url.protocol !== "https:" ||
+          (url.protocol !== "https:" &&
+            !(
+              s.auth.config.NODE_ENV !== "production" &&
+              url.origin === s.auth.config.APP_ORIGIN &&
+              ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) &&
+              url.protocol === "http:"
+            )) ||
           url.username ||
           url.password ||
           !p.captureOrigins.includes(url.origin)

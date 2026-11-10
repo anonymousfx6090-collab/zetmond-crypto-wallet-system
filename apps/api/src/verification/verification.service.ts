@@ -10,6 +10,7 @@ import {
   Mode,
   VerificationProvider,
   currency,
+  WebhookContext,
 } from "../providers/verification";
 
 export const fail = (message: string, status = 400): never => {
@@ -133,6 +134,7 @@ export class VerificationService {
       ).rowCount;
     return {
       status: a?.status || "not_started",
+      attemptId: a?.id,
       reason: reasons[a?.reason],
       country: u.country,
       mode: this.mode,
@@ -196,8 +198,16 @@ export class VerificationService {
       ).rows[0];
       const id = randomUUID();
       await c.query(
-        "INSERT INTO identity_attempts(id,case_id,provider,mode,country,status) VALUES($1,$2,$3,$4,$5,'submitting')",
-        [id, k.id, p.id, p.mode, u.country],
+        "INSERT INTO identity_attempts(id,case_id,provider,mode,country,status,disclosure_version,disclosure_url,consented_at) VALUES($1,$2,$3,$4,$5,'submitting',$6,$7,now())",
+        [
+          id,
+          k.id,
+          p.id,
+          p.mode,
+          u.country,
+          p.disclosure.version,
+          p.disclosure.url,
+        ],
       );
       await c.query(
         "UPDATE identity_cases SET current_attempt_id=$2 WHERE id=$1",
@@ -232,6 +242,70 @@ export class VerificationService {
       );
       return this.identityView(c, u);
     });
+  }
+  private async captureContext(session: string | undefined, attemptId: string) {
+    return this.db.tx(async (c) => {
+      const u = await this.eligibility.customer(c, session);
+      this.eligibility.identity(u);
+      const a = await this.currentAttempt(c, u.id);
+      const p = this.provider("identity", u.country);
+      if (
+        !a ||
+        a.id !== attemptId ||
+        !p ||
+        p.id !== a.provider ||
+        p.mode !== a.mode
+      )
+        return fail("This verification session is no longer current.", 409);
+      return {
+        p,
+        input: {
+          operationId: a.id,
+          userId: u.id,
+          email: u.email,
+          country: u.country,
+        },
+        status: a.status,
+      };
+    });
+  }
+  async browserCapture(session: string | undefined, attemptId: string) {
+    const { p, input, status } = await this.captureContext(session, attemptId);
+    if (!p.browserSession || status !== "incomplete")
+      return fail(
+        "Check your current verification status before continuing.",
+        409,
+      );
+    if (!(await this.auth.rate(`identity-capture:${input.userId}`)))
+      return fail(
+        "Too many verification requests. Please try again later.",
+        429,
+      );
+    const result = await p.browserSession(input);
+    const current = await this.captureContext(session, attemptId);
+    if (current.status !== "incomplete")
+      return fail(
+        "Your result is being processed. Check your verification status.",
+        409,
+      );
+    return result;
+  }
+  async browserSubmission(
+    session: string | undefined,
+    body: { attemptId: string; jobId?: string; userId?: string },
+  ) {
+    const { p, input } = await this.captureContext(session, body.attemptId);
+    if (!p.submissionHint)
+      return fail("Submission tracking is unavailable.", 503);
+    await p.submissionHint({
+      ...input,
+      jobId: body.jobId,
+      providerUserId: body.userId,
+    });
+    await this.db.tx((c) =>
+      this.enqueue(c, input.operationId, "identity_sync"),
+    );
+    return this.identity(session);
   }
   async banks(session?: string) {
     const result = await this.db.tx(async (c) => {
@@ -445,6 +519,7 @@ export class VerificationService {
     p: VerificationProvider,
     raw: Buffer,
     headers: Record<string, string | string[] | undefined>,
+    context?: WebhookContext,
   ) {
     let event;
     try {
@@ -455,7 +530,7 @@ export class VerificationService {
           mode: z.enum(["sandbox", "live"]),
         })
         .strict()
-        .parse(await p.authenticateWebhook(raw, headers));
+        .parse(await p.authenticateWebhook(raw, headers, context));
     } catch {
       return fail("Invalid verification event.", 401);
     }
@@ -479,6 +554,8 @@ export class VerificationService {
       const target = a || b;
       if (!target || target.provider !== p.id || target.mode !== event.mode)
         return;
+      if (p.persistWebhook)
+        await p.persistWebhook(c, raw, headers, event, context);
       const inserted = await c.query(
         "INSERT INTO verification_events(provider,mode,event_id,target_id) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING event_id",
         [p.id, p.mode, event.eventId, event.operationId],

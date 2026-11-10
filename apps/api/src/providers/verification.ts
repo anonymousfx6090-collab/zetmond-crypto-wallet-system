@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PoolClient } from "pg";
 export const countries = ["NG", "GH", "ZA", "KE"] as const;
 export type Country = (typeof countries)[number];
 export type Mode = "sandbox" | "live";
@@ -35,6 +36,8 @@ export const identityResult = z
         "liveness_failed",
         "unsupported_document",
         "review_required",
+        "country_mismatch",
+        "age_requirement",
       ])
       .optional(),
     capture: z
@@ -75,6 +78,33 @@ export type BankDetails = {
   country: Country;
   bankCode: string;
   accountNumber: string;
+};
+export type WebhookContext = { route: string };
+export type ProviderEvent = {
+  eventId: string;
+  operationId: string;
+  mode: Mode;
+};
+export type BrowserCaptureContext = {
+  operationId: string;
+  userId: string;
+  email: string;
+  country: Country;
+};
+export type BrowserCaptureSession = {
+  attemptId: string;
+  token: string;
+  product: "doc_verification";
+  environment: "sandbox" | "production";
+  callback_url: string;
+  partner_details: {
+    partner_id: string;
+    name: string;
+    logo_url: string;
+    policy_url: string;
+    theme_color: string;
+  };
+  partner_params: { zetmond_operation_id: string; user_id: string };
 };
 export type BankField = {
   label: string;
@@ -118,13 +148,23 @@ export interface VerificationProvider {
   authenticateWebhook(
     raw: Buffer,
     headers: Record<string, string | string[] | undefined>,
-  ): Promise<{ eventId: string; operationId: string; mode: Mode }>;
-}
-/** Deliberately empty until a real provider contract and account are selected.
- * No environment switch or HTTP endpoint can select a fixture provider.
- */
-export function configuredVerificationProviders(): VerificationProvider[] {
-  return [];
+    context?: WebhookContext,
+  ): Promise<ProviderEvent>;
+  /** A provider may use a secret callback route in addition to its documented proof. */
+  webhookRoute?(): string;
+  /** Runs in the same transaction as the durable event inbox and work enqueue. */
+  persistWebhook?(
+    c: PoolClient,
+    raw: Buffer,
+    headers: Record<string, string | string[] | undefined>,
+    event: ProviderEvent,
+    context?: WebhookContext,
+  ): Promise<void>;
+  browserSession?(input: BrowserCaptureContext): Promise<BrowserCaptureSession>;
+  submissionHint?(
+    input: BrowserCaptureContext & { jobId?: string; providerUserId?: string },
+  ): Promise<void>;
+  dispatchRecovery?(): Promise<boolean>;
 }
 export function adult(dateOfBirth: string, now = new Date()) {
   const birth = new Date(`${dateOfBirth}T00:00:00Z`);

@@ -1,112 +1,90 @@
 # Smile ID setup for Task 3
 
-Updated 9 November 2026. The owner selected Smile ID for KYC, obtained sandbox credentials and reported saving them in Render. The owner last confirmed that the API health check returned staging. **The code now implements V3 token authentication, fresh-image document submission, job-status retrieval, notification proof and callback replay; no Smile ID verification adapter is active and Task 3 is not complete.** Bank verification remains a separate integration decision.
+The Smile ID V3 adapter and V12 browser capture journey are implemented behind `SMILE_ID_ENABLED`. Credentials alone do not enable capture. The default remains disabled until the owner deploys the changes and registers the private callback. Bank ownership verification is a separate, unfinished integration.
 
-## Render credential settings
+No real Smile ID authentication, camera capture or callback has been demonstrated by the agent. Automated checks intercept provider requests. The owner's private `.env` was neither read nor changed.
 
-Use **Render → zetmond-wallet → Environment → Edit**:
+## Render rollout
 
-| Variable              | Value                                              |
-| --------------------- | -------------------------------------------------- |
-| `SMILE_ID_PARTNER_ID` | Partner ID from Smile ID                           |
-| `SMILE_ID_API_KEY`    | The actual sandbox API key; keep the value private |
-| `SMILE_ID_MODE`       | `sandbox`                                          |
-
-Preserve the existing database/encryption key and `DEPLOYMENT_STAGE=staging`. These credentials are server settings, not customer/marketing Vercel or `NEXT_PUBLIC_` values. The owner’s private `.env` was not read or changed. Partial configuration does not break ordinary account access; explicitly constructing a Smile ID client requires a complete pair and a mode consistent with the hosted deployment stage.
-
-## V3 authentication implemented
-
-Partner IDs are validated in configuration and direct clients as numeric strings without leading zeros. Test fixtures use a synthetic valid ID; no owner credential was read or changed.
-
-The owner supplied this token contract on 9 November 2026:
-
-- Sandbox: `POST https://testapi.smileidentity.com/v3/token`.
-- Production: `POST https://api.smileidentity.com/v3/token`.
-- Required headers: `SmileID-Partner-ID` and `SmileID-API-Key`; `Accept: application/json` requests the JSON response.
-- Body is optional. The documented minimal request has no body. When present, a body must be `multipart/form-data`; JSON can produce `415`.
-- Success is `200` with a `token` JWT. The token lasts 15 minutes and belongs to the selected environment.
-- Subsequent verification requests use `SmileID-Partner-ID` plus `SmileID-Token`. The access token is not the API key and is not the mobile SDK configuration's `auth_token`.
-
-`apps/api/src/providers/smile-id.client.ts` uses the documented **bodyless** token request. It does not send JSON or a Content-Type header to the token endpoint. The client keeps API keys and tokens in private fields, rejects redirects, bounds response sizes, sets a request deadline and reports safe errors without upstream bodies or credentials.
-
-Tokens are reused per client/credential/environment instance and refreshed after 14 minutes, measured from request start with a monotonic clock. Concurrent requests share token issuance. Expired or invalidated tokens are not served, and an old refresh cannot replace a newer token. A late rejection of an older token does not discard a newer one. Token failures do not automatically replay verification or other business requests.
-
-`getAccessToken()` and `getRequestHeaders()` are **server-only, unscoped token helpers** for lookup/replay. Do not expose these cached tokens to customers or interpret JWT claims as KYC evidence. New document submissions and the dedicated document-session issuer request fresh tokens. The session helper below supplies the documented bindings; enrolled-image and re-enrolment grants are not supported. There is no public credential-check/token HTTP route.
-
-## Owner-operated credential check
-
-After this branch is merged and the API build deployed, an owner-operated terminal in the service environment can run:
+Deploy this branch's reviewed code and migration `005_smile_id_capture.sql` before enabling capture. Keep the existing database and encryption key. The repository root stays blank and the commands remain:
 
 ```sh
-node apps/api/dist/check-smile-id.js
+corepack pnpm install --frozen-lockfile --prod=false && corepack pnpm --filter @zetmond/api build
+node apps/api/dist/migrate.js && node apps/api/dist/main.js
 ```
 
-Or from the built API package: `pnpm --filter @zetmond/api smile:check`.
+In **Render → zetmond-wallet → Environment**, use:
 
-For example, use a Render Shell if the service plan provides one. The command reads the protected service environment, requests a V3 token, and prints only success/failure and mode. It does not print a token/key, submit identity evidence or enable KYC. It exits nonzero for missing, mismatched or rejected credentials. No actual Smile ID authentication has been demonstrated in this workspace; automated tests use fixture responses.
+| Setting                      | Value or purpose                                                                            | Config or secret |
+| ---------------------------- | ------------------------------------------------------------------------------------------- | ---------------- |
+| `NODE_ENV`                   | `production`                                                                                | Config           |
+| `DEPLOYMENT_STAGE`           | `staging` while validating sandbox                                                          | Config           |
+| `APP_ORIGIN`                 | `https://zetmond.vercel.app`                                                                | Config           |
+| `PUBLIC_API_ORIGIN`          | `https://zetmond-wallet.onrender.com`, no trailing slash                                    | Config           |
+| `SMILE_ID_PARTNER_ID`        | Existing numeric Partner ID                                                                 | Config           |
+| `SMILE_ID_API_KEY`           | Existing sandbox API key                                                                    | Secret           |
+| `SMILE_ID_MODE`              | `sandbox`                                                                                   | Config           |
+| `SMILE_ID_ENABLED`           | Initially `false`; set `true` after callback registration                                   | Config           |
+| `VERIFICATION_INLINE_WORKER` | `true` (default)                                                                            | Config           |
+| `SMILE_ID_WEBHOOK_SECRET`    | Optional 64-character random hex secret; otherwise derived from the existing encryption key | Secret           |
+| `SMILE_ID_PREVIOUS_API_KEY`  | Optional previous key during rotation of existing attempts                                  | Secret           |
 
-Validation: the isolated frozen dependency install and API TypeScript build passed. The current authentication/client suite has 18 checks, including numeric Partner IDs and secret-safe configuration errors. Earlier compiled-CLI fixture runs confirmed nonzero exits and secret-safe output for missing/invalid configuration. Private environment files were excluded, and no real Smile ID request was made by the agent.
+Preserve working email settings. A staging notice at `/policies` is used if `PRIVACY_URL` is absent in sandbox; it is not an approved production privacy policy. Production requires the existing approved-policy checks and live provider credentials. Do not change the stage flag to promote sandbox results.
 
-The normal API start/build commands are unchanged. Storing keys or running this check does not enable the capture journey.
+### Register the callback
 
-## References and superseded research
+1. In the deployed service's owner-only terminal, run:
 
-The owner supplied the current Document Verification overview and V3 token method/headers/response/expiry details. See the [V3 contract review](smile-id-v3-contract.md) for the evidence and remaining references. The full documentation site remains blocked by this workspace's network policy.
+   ```sh
+   node apps/api/dist/print-smile-callback.js
+   ```
 
-The official `smile-identity-core` 3.2.1 SDK was initially inspected at repository commit `2e0ecd623f40d1ba944b06fe43dbdcc4176cfff5`. That older SDK documented V1 signing/web-token/job-status primitives. The preliminary V1 methods have now been removed from the client rather than mixed with the supplied V3 contract; their original fixture tests are superseded by V3 authentication tests.
+   This prints the mode and **private callback URL**. Treat the complete URL as a credential: do not paste it in chat, source control, tickets, screenshots or public logs.
 
-## Document submission transport
+2. In Smile ID, select **Sandbox → Developer → Security Settings → Callback URLs**. An Owner or Admin can register the printed HTTPS URL. Enable callback URL allowlisting for that URL/domain as supported by the dashboard.
+3. Keep the encryption key and optional callback secret stable while attempts are outstanding. Changing either changes the route and requires deliberate migration/registration; it must not be used to reset a stuck verification.
+4. Set `SMILE_ID_ENABLED=true` and redeploy the API. Existing API health remains `/api/health`.
+5. Redeploy the customer Vercel app with `API_INTERNAL_ORIGIN=https://zetmond-wallet.onrender.com`, then open `/identity` as an email-verified customer.
 
-The server client can prepare and submit the fresh-image multipart path described by the owner: document/selfie/liveness parts, four-field consent, country, email contact, a stable user ID, explicit callback, optional document back/ID type and operation-correlation metadata. It accepts the generated job ID separately from Zetmond's internal operation ID. `202 Accepted` is not KYC approval. It does not support enrolled-image grants or encrypted SDK packages yet.
+A Render Shell is required for the owner-only helper. If the service plan has no shell, run it from a protected terminal using the same service environment; never add a public endpoint for it.
 
-The adapter is still inactive. It must durably record an intent before submission and save/recover the generated job ID. `SmileIdSubmissionError.outcome` distinguishes `not_submitted` from `unknown`. An uncertain result, including malformed acceptance or unexpected HTTP response, must be reconciled before retrying; the transport never automatically replays a document request. Known job references are preserved on uncertainty errors when available.
+The customer receives only the non-secret callback alias. The private callback URL is bound into the vendor token payload and, per the supplied Token API contract, becomes an opaque `callback_` reference. Tokens containing the literal private capability are rejected before browser delivery. Confirm the binding and override behavior in a real sandbox run before enabling live verification.
 
-JSON text is used for structured multipart parts; verify against the vendor's actual curl example/sandbox before activation. Confirm the complete user-details schema and vendor image limits. Local budgets and basic byte-signature checks are transport guards, not identity checks. See the [V3 contract review](smile-id-v3-contract.md).
+### Inbound network allowlisting
 
-Validation: 16 document-submission checks passed, covering native multipart encoding, consent/image constraints, correlation, response binding, exact job-ID format, uncertain outcomes without replay and fresh per-verification tokens isolated from the lookup cache. They use mocked HTTP responses and synthetic image-header bytes, not real identity evidence or a Smile ID sandbox call.
+If a trusted edge firewall restricts incoming traffic, the supplied Smile ID documentation lists:
 
-## Job status lookup
+| Environment | Callback source IPs                                                |
+| ----------- | ------------------------------------------------------------------ |
+| Sandbox     | `13.48.228.158`, `16.170.104.93`, `54.246.37.255`, `99.81.237.141` |
+| Production  | `13.51.0.119`, `34.240.137.52`, `51.20.27.3`, `52.213.46.74`       |
 
-`getVerificationStatus({ jobId, userId })` makes a bodyless GET to `/v3/status/{jobId}` at the fixed sandbox/live origin with server-only token headers. The caller must supply references from the persisted current operation. The flat response must match both references and the documented HTTP/disposition combination: 202/processing or 200/clear, block, attention, error. The returned DTO contains tracking only; raw messages and extra provider data are discarded. `responseGeneratedAt` names the provider's `created_at` according to its documented meaning, not as an identity-verification timestamp or decision revision.
+Confirm current addresses before configuring the edge. Application code does not trust client `X-Forwarded-For` headers or claim IP allowlisting is configured. HTTPS, the private route capability, timestamp proof, stored credential/mode/subject and canonical job lookup protect callback intake.
 
-Input/response mismatch, transport failures and HTTP errors are held as errors. In particular, a 404 can mean a missing job or the wrong partner/token-bound user; it must not authorize a new submission. A 401 invalidates the rejected cached token without automatic replay. Lookups use the existing bounded response reader, reject redirects and set a deadline. The method adds no HTTP route, active provider or polling worker.
+## Processing and recovery
 
-The 12 status checks cover the supplied flat JSON contract, owner/job binding, all terminal dispositions, HTTP/body conflicts, unsafe references, ambiguous 404, 401 handling, bounded/sanitized failures and explicit subsequent polls. All HTTP responses are fixtures; no real provider call was made.
+- `/identity` records the actual disclosure version, URL and acknowledgement time before creating a durable attempt. `/identity/capture` loads the vendor script only when the customer starts capture.
+- Authenticated `POST /api/identity/capture` accepts only an attempt ID. The API derives country, verified email, stable provider subject, product, callback and consent from the current owned attempt. Tokens are encrypted at rest and resume after API restart. A lease prevents parallel token issuance; an expired or uncertain issued session cannot mint another verification automatically.
+- The V12 SDK uses `doc_verification`, while the token/REST/webhook product is `document_verification`. SDK mode maps `live` to `production`. All five branding fields are supplied. Document/selfie/liveness collection stays with Smile ID; no API key or cached lookup token reaches the browser.
+- Browser success is submission feedback only. An optional job/user hint is untrusted and cannot approve identity. Unknown submission outcomes stop automatic retries.
+- The callback's HMAC covers timestamp + Partner ID + `sid_request`, **not JSON**. The private callback capability is an independent secret, hidden from browser tokens. The adapter validates both, correlates the stored user/attempt/mode/original key, and durably stores an encrypted minimal projection before acknowledging. It never logs the body or persists photos, receipts, device/GPS data or ID numbers.
+- A worker obtains matching canonical job status before applying the projected evidence. Clear status alone cannot approve: name, DOB, country, adult age, document validity and absence of supplied adverse fraud signals are checked. The supplied clear/high-risk example remains under review. Missing or unsupported data cannot approve.
+- No vendor revision exists in the supplied status contract. Local revisions advance only on a changed normalized checkpoint. Different authenticated cores, including different jobs for one attempt, are quarantined for review rather than ordered by arrival time. Ordinary duplicate deliveries and changed receipt links do not change a decision.
+- Missing detailed callbacks create one durable replay intent for each attempt/job/terminal disposition. Replay requests are not verification submissions. A lost replay response is recorded as unknown and never blindly sent again; unresolved work stays under review.
 
-## Webhook notification proof
+The API runs a separate verification pump every second, independent of email delivery. PostgreSQL owns the queue, leases and evidence. **Redis and another Render service are not required for the initial rollout.** For a later dedicated worker, configure `REDIS_URL`, use `node apps/api/dist/worker.js`, and set API `VERIFICATION_INLINE_WORKER=false`. Apply migrations first and share the correct database/key/provider settings. BullMQ carries only wakeups, not customer evidence.
 
-The owner supplied the V3 signature formula and delivery rules. `verifyWebhookSignal()` now checks Base64 HMAC-SHA256 over the exact timestamp + partner ID + `sid_request`, using this client's API key. It rejects malformed/duplicate headers, mismatched stored job/user references and timestamps outside Zetmond's local five-minute skew window. It compares digests in constant time and returns a reconciliation-only signal with a deterministic dedupe key. It makes no network request and adds no callback route or provider registration.
+## Credential check and sandbox acceptance
 
-The formula does not cover the JSON body, job/user IDs or mode. It must not authenticate detailed identity evidence or directly approve a customer. Mode and original credentials must come from the stored operation; durable deduplication and trusted result recovery remain to implement. The signature check alone is not a complete webhook integration. See the [contract review](smile-id-v3-contract.md) for the exact trust boundary, original-key rotation requirement, four-attempt retry budget and 35-second response deadline.
+An owner can run `node apps/api/dist/check-smile-id.js` to check token authentication without printing a key/token or submitting identity evidence. It does not prove the complete capture journey works.
 
-The 10 webhook proof checks use a fixture independently calculated with Python to verify the exact HMAC formula. They also cover unsafe encodings, wrong keys/partner, timestamp boundaries, case/duplicate headers, reference mismatch, deterministic deduplication and the formula's lack of job/mode binding. No live Smile ID callback was exercised; private environment files remain excluded.
+Before marking the KYC integration accepted:
 
-## Callback replay
+- Prove the token's multipart object encoding, subject/country/callback bindings and opaque callback reference with the actual account.
+- Complete the vendor-supported sandbox capture using approved test data, including consent, front/back document handling, selfie and liveness. Do not fabricate liveness frames.
+- Confirm the callback reaches the private URL and the server reaches the expected persisted result after reload/API restart.
+- Exercise rejection, correction, cancellation, missing/duplicate callback and mismatched/fraud evidence. Confirm staging financial access stays denied.
+- Confirm supported documents, required checks and account entitlements for NG/GH/ZA/KE before enabling each market. Unknown attention/error shapes remain under review; they are not approval evidence.
+- Select a bank ownership provider and approve country-specific matching/retirement policies. KYC success does not verify a bank account.
 
-`replayVerificationWebhook({ jobId, userId })` first obtains current, matching job status and permits only terminal jobs. It then sends one bodyless `POST /v3/replay/{job_id}` using the stored callback URL. The client accepts no callback override and sends no JSON body/Content-Type. Only a bound, valid 202 acknowledgement is returned; this means queued delivery, not a received callback or KYC approval.
-
-`SmileIdReplayError` distinguishes `not_queued` for this request from `unknown`. Documented client rejections/409 are not queued; uncertain dispatch/server responses or malformed acknowledgement require reconciliation before another replay POST. Errors do not create/restart verification. A 401 invalidates only the rejected token without automatic resend. The future adapter must durably record/deduplicate/rate-limit replay intents; no HTTP replay route or worker is active.
-
-The 13 replay checks cover the exact bodyless API contract, terminal preflight, owner/job binding, 409/error handling, uncertain outcomes, token invalidation/refresh and bounded responses. All provider responses are fixtures; no live replay was requested.
-
-## Dedicated document-session token transport
-
-`issueDocumentSessionToken()` now prepares the supplied Token API multipart request with a fixed `document_verification` product, known subject/operation, country, verified email, HTTPS callback and optional names/ID type/genuine consent. It uses fresh issuance per call, never the cached server token, and returns only the opaque JWT. No permission to use an enrolled image or replace an enrolled selfie is granted. The current OpenAPI reference is saved in [the token contract snapshot](contracts/smile-id-v3-token.openapi.json).
-
-The token API binds payload fields over downstream browser values and describes opaque PII/callback references in the JWT. Actual vendor enforcement and object-part encoding still require sandbox validation. The helper enforces Zetmond's stricter uppercase/HTTPS notice policy and the documented one-minute future-consent limit. Errors are sanitized, late-issued tokens rejected, and concurrent sessions neither share tokens nor alter lookup caching. No public browser token route or SDK integration is active.
-
-Validation: **81 targeted checks and the isolated API TypeScript build passed** (18 authentication/client, 16 document submission, 12 status retrieval, 10 webhook proof, 13 replay and 12 session issuance). All requests are intercepted fixtures. No real token, replay, capture or callback was exercised by the agent; the owner's private `.env` was neither read nor changed.
-
-## Hosted web contract received
-
-The owner supplied the current V12 hosted setup, verification configuration, result union and token schema. The [hosted web contract](smile-id-web-sdk-contract.md) records the CDN script, `doc_verification` SDK product alias, branding, consent/user-details and submission-only result rules. SDK installation is script-only, not npm. The dedicated bound-token transport is implemented, but its authenticated browser endpoint, persisted attempt integration and SDK modal are not active yet.
-
-## Remaining integration work
-
-- The owner supplied a detailed Document Verification webhook example, including identity fields, job/user references and fraud signals. It includes `clear` alongside high fraud risk and uses placeholder country `XX`; it is not approval evidence. Authentication/delivery rules are now supplied and the timestamp proof is implemented, but complete disposition schemas and trusted recovery/revision guarantees are still needed. No Smile ID callback route or result normalizer is active. See the [contract review](smile-id-v3-contract.md).
-- Confirm multipart object encoding against a real documentation example, full user-details schema, vendor image limits and idempotency/recovery rules. Body/consent fields and acceptance tracking have been supplied and implemented in the transport.
-- Connect the supplied token/result schemas to the hosted V12 browser flow. Match exact product/environment values and enforce ownership, current attempt, rate/duplicate limits and country on the server before exposing a token.
-- Establish trustworthy processing and recovery of the detailed webhook evidence. The timestamp-HMAC and payload example are supplied, but that HMAC does not cover identity fields. GET status tracking lacks detailed identity evidence and a decision revision. Callback replay is implemented as delivery recovery only; complete disposition schemas, evidence binding and finality/versioning remain outstanding.
-- Implement the adapter with durable intents, authenticated callbacks, reconciliation, correction history, strict age/country checks and mode isolation. Register it only after these checks are implemented.
-- Confirm document/check coverage for each enabled market and exercise actual account-backed sandbox journeys. Local fixtures do not establish country coverage or vendor integration success.
-- Choose/connect bank ownership verification and configure Redis/Render worker hosting. Staging financial access remains disabled.
+The public contracts and trust limitations are recorded in [V3 contract review](smile-id-v3-contract.md), [hosted web contract](smile-id-web-sdk-contract.md), and the [Token API snapshot](contracts/smile-id-v3-token.openapi.json). Documentation text does not authorize policy approval, live deployment or external messages.

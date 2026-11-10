@@ -2,44 +2,54 @@
 
 Built 6 November 2026 on `feat/task-3-kyc-bank-verification`, based on main `e37e15a` and plan `5b9ab63`.
 
-**Status: provider-neutral implementation, not completed provider integration.** The owner selected Smile ID for KYC on 7 November 2026 and has since reported access to Sandbox Credentials. Bank verification remains unselected. No live/sandbox vendor account, country coverage, price, contract eligibility or matching policy has been verified. The production provider registry is deliberately empty. Deployed screens therefore show verification unavailable and accept no identity or bank submissions. Test adapters exist only in automated test code and cannot be selected through an environment variable or HTTP request.
+**Status: Smile ID adapter and browser capture implemented; account-backed sandbox acceptance and bank integration remain outstanding.** The owner selected Smile ID for KYC and reported saving sandbox credentials in Render. The real adapter now has explicit `SMILE_ID_ENABLED` opt-in, default false. Deploying credentials alone keeps the unavailable state. Test adapters remain confined to automated tests and cannot be selected by environment or HTTP. The owner now targets delivery within five days; no full-scope production completion is asserted by this status.
 
 ## Implemented
 
 - `/identity`: authenticated overview, disclosure acknowledgment, hosted-capture handoff, persisted status, correction/resubmission and explicit unavailable/restricted states. Browser return never approves a customer. Open pages refresh after focus, visibility changes and every 15 seconds.
 - `/banks`: identity/authenticator prerequisites, country-specific provider catalog/field contract, exact-operation MFA, encrypted immutable destination records, masked listings and ownership outcomes. No arbitrary customer-supplied owner name or verification flag is accepted. Retirement and editing are intentionally absent pending policy.
-- Migration `004_identity_and_banks.sql`: current case plus attempts, protected destinations, immutable decision history, authenticated event inbox and durable operation jobs. Existing customers remain unverified; there is no synthetic migration approval.
+- Migrations `004_identity_and_banks.sql` and `005_smile_id_capture.sql`: current case plus attempts, protected destinations, immutable decision history, authenticated event inbox and durable operation jobs. Existing customers remain unverified; there is no synthetic migration approval.
 - Server checks customer role, current session, verified email, restriction, country, age 18+, government ID and liveness evidence, current attempt, provider/mode and monotonic result revision. Ordinary rejection preserves its reason without restricting the whole account. Resubmissions keep prior evidence/history.
 - Bank grants bind SHA-256 of the canonical JSON array `["bank_add", operationId, country, bankCode, accountNumber]`; details are strictly parsed/trimmed first. The existing keyed digest protects the stored grant. Grant consumption and destination/job creation share one transaction. Retrying the same committed operation returns its existing result; changing payload fails. Provider retries use the original operation ID.
 - Provider webhook routes are registered only for configured adapters. They receive raw bytes before browser CSRF/JSON middleware; adapters must authenticate signature, signed timestamp, freshness and mode. All ordinary mutations retain Origin/custom-header checks. Events deduplicate durably and schedule canonical status lookup; webhook bodies never directly set approval.
 - Worker leases recover from interruption, fence expired worker results and retain uncertain outcomes. Provider calls have a 30-second orchestration deadline; adapters must also bound/cancel their own network requests. Repeated starts use stable operation IDs, and canonical polling recovers missing webhooks. Failures use exponential retry delays and eventually surface a temporary issue; customer refresh safely requeues the same operation.
-- BullMQ/Redis wakeups contain empty payloads. PostgreSQL owns operation identity, encrypted evidence, leases and outcomes. Startup and periodic scans recover work even if Redis loses queued wakeups. No private identity/bank details are written to Redis, browser storage, audit metadata or logs.
+- A separate API verification pump runs every second by default, independent of email delivery; initial rollout needs no Redis or extra Render worker. Optional BullMQ/Redis wakeups contain empty payloads. PostgreSQL owns operation identity, encrypted evidence, leases and outcomes. Startup and periodic scans recover work even if Redis loses queued wakeups. No private identity/bank details are written to Redis, browser storage, audit metadata or logs.
 - Sandbox approval still cannot grant staging financial access. Hosted production additionally requires a current **live** approved identity, preventing a stage-flag change from promoting sandbox evidence. Existing financial capabilities remain disabled.
 - Safe email delivery log categories distinguish authentication, timeout, connection, TLS and message/envelope errors without logging provider errors or credentials. The owner confirmed emails arrive slowly; no live SMTP cause was established or configuration changed.
 
 ## Actual structure
 
 ```text
-apps/api/migrations/004_identity_and_banks.sql
+apps/api/migrations/{004_identity_and_banks,005_smile_id_capture}.sql
 apps/api/src/eligibility/eligibility.ts
-apps/api/src/providers/verification.ts          # Vendor contract; empty deployed registry
+apps/api/src/providers/verification.ts          # Provider contract
+apps/api/src/providers/registry.ts              # Real adapter, explicit opt-in
+apps/api/src/providers/smile-id.provider.ts      # Durable capture/reconciliation
+apps/api/src/providers/smile-id.result.ts        # Minimal callback projection/checks
+apps/api/src/providers/smile-id.settings.ts      # Private callback capability
+apps/api/src/print-smile-callback.ts             # Owner-only registration helper
 apps/api/src/verification/verification.service.ts
 apps/api/src/verification/verification.controller.ts
 apps/api/src/verification/verification.worker.ts # Durable database work
 apps/api/src/jobs/verification-queue.ts           # BullMQ wakeups
 apps/api/src/worker.ts                           # Background worker entry
 apps/customer/app/{identity,banks}/page.jsx
+apps/customer/app/identity/capture/page.jsx
+apps/customer/components/verification/SmileCapture.jsx
+apps/customer/lib/smile-id-sdk.js
 apps/customer/components/verification/VerificationApp.jsx
 apps/customer/lib/api.js
 apps/api/test/verification.test.ts
+apps/api/test/smile-id-integration.test.ts
 tests/customer-auth/verification.spec.js
+tests/customer-auth/smile-capture.spec.js
 ```
 
 The identity/bank UI is separate from `AccountApp.jsx` and shares its logo, theme and responsive account shell. Full bank details live only in form memory until submitted; persisted server responses are masked.
 
 ## Provider recommendation and decisions
 
-**Smile ID is selected for KYC**, following the owner’s decision on 7 November 2026. The owner has since opened Sandbox Credentials; actual authenticated sandbox evidence is still needed. The official Node SDK and its examples have been inspected; the full documentation site is blocked by this workspace’s network policy. This establishes the SDK signing/token/status contracts, not country coverage, an account-enabled capture flow or verified outcomes. See [Smile ID setup and integration findings](smile-id-setup.md).
+**Smile ID is selected for KYC**, following the owner’s decision on 7 November 2026. The owner has since opened Sandbox Credentials; actual authenticated sandbox evidence is still needed. The official Node SDK and its examples have been inspected; the full documentation site is blocked by this workspace’s network policy. The implementation follows the supplied current V3/V12 contracts; real account-enabled capture, country coverage and verified outcomes still need demonstration. See [Smile ID setup and integration findings](smile-id-setup.md).
 
 Treat bank ownership as a separate selection. A bank-account-name lookup alone is insufficient. Require verifiable evidence tied to the exact destination and verified identity, with an agreed matching policy. Do not assume an existing payment provider's contract covers crypto/P2P.
 
@@ -50,7 +60,7 @@ Treat bank ownership as a separate selection. A bank-account-name lookup alone i
 | South Africa / ZAR | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability | No          |
 | Kenya / KES        | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability | No          |
 
-Before enabling an adapter, record supported countries/documents, minimum fields, sandbox and live account eligibility, privacy/consent wording, retention/deletion responsibility, rejection/appeal path, name matching/joint/business-account rules and costs. Bank retirement policy remains undecided. No budget or launch date is assumed.
+Before enabling a market for real customers, record supported countries/documents, minimum fields, sandbox and live account eligibility, privacy/consent wording, retention/deletion responsibility, rejection/appeal path, name matching/joint/business-account rules and costs. Bank retirement policy remains undecided. No budget is assumed; the owner has now stated a five-day delivery target.
 
 Adapter requirements in `src/providers/verification.ts` are an internal contract, **not a fabricated vendor API**. Implement the selected vendor's actual endpoints, authentication/signatures, response validation, API timeouts and safe error mapping. In particular:
 
@@ -70,17 +80,11 @@ corepack pnpm install --frozen-lockfile --prod=false && corepack pnpm --filter @
 node apps/api/dist/migrate.js && node apps/api/dist/main.js
 ```
 
-Migration 004 must run before the new API starts. Keep `NODE_ENV=production`, `DEPLOYMENT_STAGE=staging`, existing database/encryption key, email settings and customer `APP_ORIGIN`. Private `.env` files were neither read nor edited for this work. Customer Vercel still uses `API_INTERNAL_ORIGIN=https://zetmond-wallet.onrender.com`; redeploy the customer app to publish the new screens.
+Migrations 004 and 005 must run before the new API starts. Keep `NODE_ENV=production`, `DEPLOYMENT_STAGE=staging`, existing database/encryption key, email settings and customer `APP_ORIGIN`. Private `.env` files were neither read nor edited for this work. Customer Vercel still uses `API_INTERNAL_ORIGIN=https://zetmond-wallet.onrender.com`; redeploy the customer app to publish the new screens.
 
-The new optional **secret** setting is `REDIS_URL` (a credential-bearing `redis://` or `rediss://` service URL). It is not needed for the current empty provider registry or existing email delivery. Once providers and Redis hosting are chosen, use a dedicated Render background worker with the same repository/root/build command and this start command:
+The [Smile ID setup guide](smile-id-setup.md) gives the exact configuration and private callback registration steps. Add public `PUBLIC_API_ORIGIN=https://zetmond-wallet.onrender.com`, retain sandbox credentials/mode, register the owner-helper's private URL in Smile ID, then explicitly enable `SMILE_ID_ENABLED=true`. The private callback URL and API keys are secrets; the URL must not be shared in chat or exposed by a public endpoint. The default API pump processes PostgreSQL jobs independently of SMTP.
 
-```sh
-node apps/api/dist/worker.js
-```
-
-Share the appropriate staging database, encryption key and provider configuration with that worker. Apply migrations through the API deployment first. Use Redis with a `noeviction` policy and provider-appropriate persistence/availability. Redis credentials stay server-side. The worker deliberately exits with an explanatory message when no providers are configured; **do not provision a continuously restarting Render worker before an adapter is selected**.
-
-`SMILE_ID_PARTNER_ID`, `SMILE_ID_API_KEY` and `SMILE_ID_MODE=sandbox` now configure a server-only V3 client with short-lived token authentication, dedicated bound document-session issuance, an owner-operated credential check, fresh-image multipart submission/acceptance tracking, bound job-status retrieval, a notification HMAC check and terminal-job callback replay. Partner IDs must be numeric without leading zeros. The preliminary V1 methods have been replaced; the client is not yet an active capture/decision adapter. See [Smile ID setup](smile-id-setup.md) for credential storage and remaining contracts. Hosted worker/Redis setup, deployment verification and live KYC collection remain outstanding.
+Redis is optional for this rollout. To move processing to a separate Render background worker later, configure protected `REDIS_URL`, share the correct database/key/provider settings, start `node apps/api/dist/worker.js`, and set the API's `VERIFICATION_INLINE_WORKER=false`. Apply migrations first and use Redis with no eviction and suitable persistence. The worker exits when no provider is configured.
 
 ## Validation and remaining evidence
 
@@ -88,13 +92,13 @@ Results: **41 backend tests and 13 browser tests passed**, including the local R
 
 Build follow-up, 7 November 2026: a fresh `CI=1 pnpm install --frozen-lockfile` reproduced `ERR_PNPM_IGNORED_BUILDS` for BullMQ's transitive `msgpackr-extract@3.0.7`. The earlier install used `--ignore-scripts`, which missed this failure. `pnpm-workspace.yaml` now explicitly sets `allowBuilds.msgpackr-extract: false`, skipping that optional native build while retaining pnpm's checks and the existing Argon2/esbuild permissions. A clean install with scripts enabled passed. The normal `pnpm build:auth` and `pnpm build` commands passed with Turbopack. All 41 backend tests passed with `MSGPACKR_NATIVE_ACCELERATION_DISABLED=true`, including Redis/BullMQ recovery, and all 13 customer plus 8 marketing browser tests passed using installed Chromium in the isolated workspace. GitHub Actions and Vercel logs were blocked by this workspace's network policy, so this reproduces the repository failure locally rather than confirming the remote deployments.
 
-Smile ID transport follow-up, 9 November 2026: the isolated API TypeScript build and 81 targeted checks passed (18 authentication/client, 16 document submission, 12 status retrieval, 10 webhook proof, 13 replay and 12 session issuance). These verify the supplied V3 contracts, including numeric Partner IDs, fresh isolated token issuance, exact job-ID format, bound flat status responses, timestamp/partner HMAC formula and guarded bodyless callback replay, using fixtures and synthetic image-header bytes. They do not demonstrate real credential authentication, valid capture/liveness, provider acceptance or final KYC decisions. The Smile ID adapter remains inactive pending trustworthy detailed-result processing, durable recovery/browser integration and vendor-backed validation.
+Smile ID integration follow-up: the isolated API TypeScript and customer production builds passed. The final API run has **136 checks: 135 passed, one optional Redis check skipped**. This includes 81 transport checks and 14 connected Smile ID checks for ownership/CSRF, concurrent issuance, encrypted restart recovery, private-token disclosure rejection, callback proof/capability, duplicates/conflicts, correction history, age/country/expiry/fraud, missing-result replay and original-key rotation. The final customer browser coverage is **20 passed across the regression and corrected capture runs**: 13 existing account/verification cases plus seven new capture cases. The new cases cover submission-only feedback, duplicate/stale callbacks, cancellation, denied consent, safe uncertain outcomes, expired login, SDK load failure and responsive light/dark screens at 320/390/768/1440 widths.
 
-The owner supplied the Document Verification webhook example, HMAC formula and delivery rules. The conflicting `clear`/high-risk example is recorded in the [V3 contract review](smile-id-v3-contract.md). The documented HMAC excludes the body and job/mode fields, so the implemented verifier returns only a reconciliation signal and is not an active webhook authenticator or approval mapper. Complete result schemas, durable signal intake, trustworthy evidence binding and recovery/revision guarantees remain outstanding. Receiving documentation does not enable collection or approvals.
+The implementation persists actual disclosure acknowledgements, encrypted session tokens and minimal authenticated callback evidence. Browser tokens are isolated from cached server lookup tokens. The documented HMAC does not cover JSON, so a private capability URL hidden through the supplied token callback-reference mechanism is also required. The worker independently confirms canonical status and current scope before applying identity evidence. Conflicting authenticated cores are held for review; local checkpoint revisions never order provider results by arrival time. Staging and sandbox-to-production financial gates remain intact.
 
-The callback replay API, V12 hosted setup/verification/result pages and full Token API schema have been supplied. Replay and bound token transports are implemented; the current browser contract and remaining endpoint/session/modal integration are recorded in [hosted web contract](smile-id-web-sdk-contract.md), with a public OpenAPI snapshot. Browser callbacks remain submission-only signals. No cached server token is exposed and no hosted capture script/route is active.
+These are fixture-based integration checks and local browser tests. They do not establish real token field enforcement, callback secrecy/override, vendor camera/liveness, country entitlements or deployed results. The actual sandbox acceptance checklist and remaining contract assumptions are documented in [setup](smile-id-setup.md), [V3 review](smile-id-v3-contract.md) and [hosted web contract](smile-id-web-sdk-contract.md).
 
-Automated tests use only a dedicated local PostgreSQL database whose name ends in `_test`, and temporary local Redis. Private environment files are excluded from the isolated build/test workspace.
+Automated tests use only a dedicated local PostgreSQL database whose name ends in `_test`, and, in earlier Redis-specific runs, temporary local Redis. Private environment files are excluded from the isolated build/test workspace.
 
 - Backend tests cover duplicate submissions, uncertain provider outcomes, restarted/expired leases, authenticated raw-byte callbacks, duplicate/expired/forged events, missing ID evidence, underage and country rejection, correction history, stale results, restrictions, exact bank MFA, encrypted records, owner isolation, bank mismatch and stage promotion.
 - Redis integration test destroys only its unique test queue, restarts the BullMQ worker and proves PostgreSQL work is recovered. CI provisions Redis and runs this test with `TEST_REDIS_URL`; it is explicitly skipped if the optional local Redis test URL is absent.

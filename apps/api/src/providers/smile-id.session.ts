@@ -30,7 +30,7 @@ export class SmileIdSessionError extends Error {
 }
 
 /** Only accepts context from an authenticated, persisted current attempt.
- * A future HTTP issuer must enforce ownership, eligibility, CSRF and rate/lease
+ * The HTTP issuer must enforce ownership, eligibility, CSRF and rate/lease
  * limits before invoking this; never forward an arbitrary browser token request.
  * Token product is fixed to the REST product, not the SDK's doc_verification alias.
  * No enrolled-image or re-enrolment grants are accepted; provider defaults stay false.

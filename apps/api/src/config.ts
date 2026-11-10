@@ -37,6 +37,23 @@ const schema = z.object({
   SMILE_ID_PARTNER_ID: smileIdPartnerIdSchema.optional(),
   SMILE_ID_API_KEY: z.string().trim().min(1).max(4096).optional(),
   SMILE_ID_MODE: z.enum(["sandbox", "live"]).default("sandbox"),
+  SMILE_ID_ENABLED: z.enum(["true", "false"]).default("false"),
+  PUBLIC_API_ORIGIN: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().url().optional(),
+  ),
+  SMILE_ID_WEBHOOK_SECRET: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z
+      .string()
+      .regex(/^[a-fA-F0-9]{64}$/)
+      .optional(),
+  ),
+  SMILE_ID_PREVIOUS_API_KEY: z.preprocess(
+    (v) => (v === "" ? undefined : v),
+    z.string().trim().min(1).max(4096).optional(),
+  ),
+  VERIFICATION_INLINE_WORKER: z.enum(["true", "false"]).default("true"),
   REDIS_URL: z
     .string()
     .url()
