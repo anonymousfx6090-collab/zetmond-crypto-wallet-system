@@ -5,6 +5,7 @@ import { z } from "zod";
 import { AuthService } from "../auth/auth.service";
 import { seal, unseal, digest, hash } from "../crypto";
 import { Eligibility } from "../eligibility/eligibility";
+import { countries, isSupportedCountry } from "../markets";
 import {
   Country,
   Mode,
@@ -19,7 +20,7 @@ export const fail = (message: string, status = 400): never => {
 export const bankInput = z
   .object({
     operationId: z.string().uuid(),
-    country: z.enum(["NG", "GH", "ZA", "KE"]),
+    country: z.enum(countries),
     bankCode: z.string().trim().min(1).max(80),
     accountNumber: z.string().trim().min(4).max(40),
   })
@@ -109,7 +110,9 @@ export class VerificationService {
     const a = await this.currentAttempt(c, u.id),
       p = this.provider("identity", u.country);
     const providerMatches =
-      !!p && (!a || (a.provider === p.id && a.mode === p.mode));
+      !!p &&
+      (!a ||
+        (a.country === u.country && a.provider === p.id && a.mode === p.mode));
     let capture;
     if (
       u.email_verified &&
@@ -252,6 +255,7 @@ export class VerificationService {
       if (
         !a ||
         a.id !== attemptId ||
+        a.country !== u.country ||
         !p ||
         p.id !== a.provider ||
         p.mode !== a.mode
@@ -323,12 +327,13 @@ export class VerificationService {
         provider: p,
         view: {
           country: u.country,
-          currency: currency[u.country as Country],
+          currency: currency[u.country as Country] ?? null,
           mode: this.mode,
           available: !!p,
           identityVerified:
             u.kyc_status === "approved" &&
             a?.status === "approved" &&
+            a.country === u.country &&
             a.mode === this.mode,
           mfaEnabled: !!u.mfa_secret,
           emailVerified: u.email_verified,
@@ -342,6 +347,9 @@ export class VerificationService {
             status: r.status,
             reason: reasons[r.reason],
             usable:
+              isSupportedCountry(u.country) &&
+              isSupportedCountry(r.country) &&
+              r.country === u.country &&
               r.status === "verified" &&
               r.identity_attempt_id === a?.id &&
               u.kyc_status === "approved",
@@ -419,6 +427,7 @@ export class VerificationService {
       if (
         !a ||
         a.status !== "approved" ||
+        a.country !== u.country ||
         a.mode !== this.mode ||
         !a.evidence_payload
       )
@@ -505,7 +514,13 @@ export class VerificationService {
       if (!b) return fail("Bank account not found.", 404);
       const a = await this.currentAttempt(c, u.id),
         p = this.provider("bank", u.country);
-      if (a?.id !== b.identity_attempt_id || a?.status !== "approved")
+      if (
+        a?.id !== b.identity_attempt_id ||
+        a?.status !== "approved" ||
+        a.country !== u.country ||
+        b.country !== u.country ||
+        !isSupportedCountry(b.country)
+      )
         return fail("The bank account needs a current verified identity.", 409);
       if (!p || p.id !== b.provider || p.mode !== b.mode)
         return fail("Bank verification is currently unavailable.", 503);

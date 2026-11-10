@@ -6,6 +6,7 @@ import { Config } from "../config";
 import { Database } from "../db";
 import { digest, hash, seal, token, unseal } from "../crypto";
 import { Delivery } from "../delivery/delivery.service";
+import { Country, currency, isSupportedCountry } from "../markets";
 
 const rejected = (message = "Authentication required.", status = 401) => ({
   error: message,
@@ -73,9 +74,7 @@ export class AuthService {
     return u;
   }
   view(u: any) {
-    const currency = (
-      { NG: "NGN", GH: "GHS", ZA: "ZAR", KE: "KES" } as Record<string, string>
-    )[u.country];
+    const marketSupported = isSupportedCountry(u.country);
     const state = !u.mfa_verified
       ? u.mfa_secret
         ? "mfa_required"
@@ -92,7 +91,8 @@ export class AuthService {
       email: u.email,
       phone: u.phone,
       country: u.country,
-      currency,
+      currency: marketSupported ? currency[u.country as Country] : null,
+      marketSupported,
       role: u.role,
       emailVerified: u.email_verified,
       phoneVerified: u.phone_verified,
@@ -100,6 +100,7 @@ export class AuthService {
       mfaEnabled: !!u.mfa_secret,
       state,
       financialAccess:
+        marketSupported &&
         this.config.DEPLOYMENT_STAGE !== "staging" &&
         (this.config.NODE_ENV !== "production" || u.identity_mode === "live") &&
         u.role === "customer" &&

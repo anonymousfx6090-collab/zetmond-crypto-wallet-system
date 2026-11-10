@@ -177,6 +177,7 @@ test("invalid context, extra payloads and capture-bypass/re-enrolment grants fai
     input({ userId: "fixture\n" }),
     input({ email: "invalid" }),
     input({ country: "US" as any }),
+    input({ country: "ZA" as any }),
     input({ callbackUrl: "http://api.example.test/callback" }),
     input({ callbackUrl: "https://user:private@api.example.test/callback" }),
     input({ callbackUrl: "callback_unverified_reference" }),
@@ -237,7 +238,7 @@ test("consent accepts at most one minute of future clock skew", () => {
   );
 });
 test("country bindings stay explicit for every enabled launch market", async () => {
-  for (const country of ["NG", "GH", "ZA", "KE"] as const) {
+  for (const country of ["NG", "GH", "KE"] as const) {
     const c = client(async (_, options) => {
       assert.equal(
         JSON.parse(String((options!.body as FormData).get("payload"))).country,

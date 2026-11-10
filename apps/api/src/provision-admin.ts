@@ -3,9 +3,10 @@ import * as argon2 from "argon2";
 import { z } from "zod";
 import { Database } from "./db";
 import { email, password } from "./auth/validation";
+import { countries } from "./markets";
 export async function provisionAdmin(url: string, input: unknown) {
   const v = z
-    .object({ email, password, country: z.enum(["NG", "GH", "ZA", "KE"]) })
+    .object({ email, password, country: z.enum(countries) })
     .strict()
     .parse(input);
   const db = new Database(url);

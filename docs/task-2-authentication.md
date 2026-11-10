@@ -40,7 +40,7 @@ The customer layout imports the existing marketing theme provider and before-pai
 
 ## Delivered flows
 
-- Customer registration in NG/NGN, GH/GHS, ZA/ZAR and KE/KES, with matching international phone validation and versioned policy acceptance.
+- Customer registration in NG/NGN, GH/GHS and KE/KES, with matching international phone validation and versioned policy acceptance.
 - Email-only challenges, expiry, attempt limits, resend cooldown and persisted delivery state. Phone numbers remain unverified contact data; SMS and phone verification are not required.
 - Argon2id password hashes, opaque hashed sessions, secure HTTP-only cookies, logout and owner-scoped session revocation.
 - Authenticator-app enrollment and challenge, one-time recovery codes, TOTP replay protection, session-token rotation and mandatory administrator MFA.

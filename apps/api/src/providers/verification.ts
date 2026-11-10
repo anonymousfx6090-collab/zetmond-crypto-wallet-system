@@ -1,14 +1,9 @@
 import { z } from "zod";
 import type { PoolClient } from "pg";
-export const countries = ["NG", "GH", "ZA", "KE"] as const;
-export type Country = (typeof countries)[number];
+import { countries, Country } from "../markets";
+export { countries, currency } from "../markets";
+export type { Country } from "../markets";
 export type Mode = "sandbox" | "live";
-export const currency: Record<Country, string> = {
-  NG: "NGN",
-  GH: "GHS",
-  ZA: "ZAR",
-  KE: "KES",
-};
 const date = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)

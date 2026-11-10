@@ -629,6 +629,12 @@ export default function AccountApp({ screen }) {
       )}
       {!loading && user && screen === "account" && (
         <>
+          {user.marketSupported === false && (
+            <p className="notice" role="note">
+              Zetmond currently supports Nigeria, Ghana and Kenya. Verification
+              and financial features are unavailable for this account country.
+            </p>
+          )}
           <section className="profile-banner" aria-label="Your profile">
             <div className="profile-avatar" aria-hidden="true">
               {user.email[0].toUpperCase()}
@@ -638,9 +644,10 @@ export default function AccountApp({ screen }) {
               <h2>{user.email}</h2>
               <p>
                 <Globe2 size={14} aria-hidden="true" />
-                {policy?.countries.find((c) => c.code === user.country)?.name}
+                {policy?.countries.find((c) => c.code === user.country)?.name ||
+                  user.country}
                 <span>·</span>
-                {user.currency}
+                {user.currency || "Unavailable"}
               </p>
             </div>
             <span

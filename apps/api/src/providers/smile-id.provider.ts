@@ -4,6 +4,7 @@ import { PoolClient } from "pg";
 import { Config, ConfigurationError } from "../config";
 import { Database } from "../db";
 import { digest, hash, seal, unseal } from "../crypto";
+import { countries, isSupportedCountry } from "../markets";
 import { configuredSmileIdClient, SmileIdClient } from "./smile-id.client";
 import { SmileIdReplayError } from "./smile-id.replay";
 import { smileIdCallbackSettings } from "./smile-id.settings";
@@ -30,7 +31,7 @@ export class SmileIdProvider implements VerificationProvider {
   readonly id = "smile-id";
   readonly mode: Mode;
   readonly captureOrigins: readonly string[];
-  readonly identityCountries = ["NG", "GH", "ZA", "KE"] as const;
+  readonly identityCountries = countries;
   readonly bankCountries = [];
   readonly bankPolicyVersion = "unavailable";
   readonly disclosure: { version: string; url: string };
@@ -140,6 +141,7 @@ export class SmileIdProvider implements VerificationProvider {
       a.user_id === (userId || a.user_id) &&
       a.current_attempt_id === a.id &&
       a.role === "customer" &&
+      isSupportedCountry(a.country) &&
       a.email_verified &&
       !a.restricted &&
       a.kyc_status !== "restricted"

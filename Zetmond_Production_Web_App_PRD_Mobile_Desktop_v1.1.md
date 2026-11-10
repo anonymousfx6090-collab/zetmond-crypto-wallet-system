@@ -10,10 +10,10 @@
 | Delivery intent | A production service for real users, real identity verification and real funds |
 | Document status | Owner-approved decisions recorded in Section 23; remaining details and launch blockers remain explicit |
 | Primary source | `Zetmond_Product_Requirements_Document_v1.0.md`, dated 19 October 2026 |
-| Authoritative update | Owner decision review/shared login: 3 November 2026; negotiated-price chat, Render API hosting and email-only verification: 5 November 2026; hosted staging while preparing the full launch: 6 November 2026 · Africa/Lagos |
+| Authoritative update | Owner decision review/shared login: 3 November 2026; negotiated-price chat, Render API hosting and email-only verification: 5 November 2026; hosted staging: 6 November 2026; three-country launch scope and five-day delivery request: 9 November 2026 · Africa/Lagos |
 | Platforms | Responsive browser application: desktop, tablet, phone and intermediate widths |
 | Related surfaces | Existing public marketing site; customer web application; separate admin portal |
-| Schedule | No launch date or delivery estimate has been approved |
+| Schedule | Owner requested delivery within five days on 9 November 2026; launch depends on completed acceptance and provider readiness |
 | Intended readers | Product owner, frontend and backend engineers, designers, QA, security, operations and implementation collaborators |
 
 > **Implementation contract:** Production features must use authenticated backend services and durable records. Customer balances, KYC decisions, funding, settlement and refunds must reflect verified events. Mock balances, simulated payment buttons, browser-only trade state and arbitrary approval switches cannot satisfy production acceptance.
@@ -38,7 +38,9 @@ This revision preserves the uploaded v1.0 production requirements and records th
 
 **Hosted staging — owner-approved 6 November 2026:** deploy a clearly identified testing environment on Render/Vercel while completing the product and launch policies. The owner intends all features for the real-customer launch and deferred legal operator/contact details; this is not approval of a partial customer launch. Keep production runtime security, use test accounts/data, and disable financial access on the backend. Staging may leave legal/security approval settings pending; the default production deployment still requires them. See Section 16.7 and `docs/render-staging.md`.
 
-**Current delivery context:** budget and launch volume are TBD, no launch date is set, and development is planned with the product owner and AI assistant. Operational responders, independent assessments and any specialist responsibilities must still be assigned before launch; they are not supplied by this development arrangement.
+**Launch-market update — owner-directed 9 November 2026:** support Nigeria/NGN, Ghana/GHS and Kenya/KES only. South Africa/ZAR is removed from the launch scope. This supersedes the previous four-country decision in O01 and applies to signup, verification, bank-provider selection and fiat-market planning. Existing records and financial obligations are retained; a removed country cannot retain verification or financial eligibility through an old approval.
+
+**Current delivery context:** the owner requested delivery within five days on 9 November 2026. Budget and launch volume remain TBD, and development is planned with the product owner and AI assistant. Operational responders, independent assessments and any specialist responsibilities must still be assigned before launch; they are not supplied by this development arrangement.
 
 The original uploaded v1.0 file and the existing main PRD are preserved unchanged. No application implementation or provider selection is claimed by this document.
 
@@ -1517,15 +1519,14 @@ Server events provide evidence of financial outcomes. A browser click named “p
 
 ### 23.1 Status and authority
 
-The following answers were explicitly supplied or approved by the owner in the decision review ending 3 November 2026 (Africa/Lagos), with O10/O23 updated by the owner's negotiated-price approval, O25/O26 by the Render API hosting choice, O22/O24 by the email-only/no-SMS decision on 5 November 2026, and O19 by the owner's Smile ID selection on 7 November 2026. “Approved” records product intent, not implementation completion or provider/legal feasibility. “Approved baseline; details TBD” means only the stated baseline is approved. Resolve remaining details before enabling the affected operation. The original O01–O29 identifiers are retained.
+The following answers were explicitly supplied or approved by the owner in the decision review ending 3 November 2026 (Africa/Lagos), with O10/O23 updated by the owner's negotiated-price approval, O25/O26 by the Render API hosting choice, O22/O24 by the email-only/no-SMS decision on 5 November 2026, and O19 by the owner's Smile ID selection on 7 November 2026. O01 was revised on 9 November 2026 to remove South Africa and retain Nigeria, Ghana and Kenya. “Approved” records product intent, not implementation completion or provider/legal feasibility. “Approved baseline; details TBD” means only the stated baseline is approved. Resolve remaining details before enabling the affected operation. The original O01–O29 identifiers are retained.
 
 ### O01 — Launch countries and markets — Approved
 
 - Nigeria: NGN (Nigerian naira).
 - Ghana: GHS (Ghanaian cedi).
-- South Africa: ZAR (South African rand); owner's “SA” was interpreted as South Africa in the review.
 - Kenya: KES (Kenyan shilling).
-- Registration and local-currency P2P trading are intended in each of these four markets, subject to eligible providers and launch gates. No cross-currency trading policy or legal eligibility is inferred.
+- Registration and local-currency P2P trading are intended in each of these three markets, subject to eligible providers and launch gates. No cross-currency trading policy or legal eligibility is inferred.
 
 ### O02 — Supported USDT network — Approved
 
@@ -1554,7 +1555,7 @@ Refresh estimates every 60 seconds and mark them stale after 5 minutes. Use the 
 
 ### O06 — Fiat providers — TBD
 
-No fiat collection/payout/refund provider has been selected for NGN, GHS, ZAR or KES. The owner requested research, then explicitly deferred this decision as TBD when live research was blocked by network policy. Yellow Card and OVEX were unverified preliminary candidates only, not selected or confirmed eligible. The v1.0 Monnify finding is a historical document statement, not independently reverified in this review.
+No fiat collection/payout/refund provider has been selected for NGN, GHS or KES. The owner requested research, then explicitly deferred this decision as TBD when live research was blocked by network policy. Yellow Card and OVEX were unverified preliminary candidates only, not selected or confirmed eligible. The v1.0 Monnify finding is a historical document statement, not independently reverified in this review.
 
 Obtain eligible contracts and written capability confirmation for Zetmond's disclosed custody/P2P flow, trade-linked accounts, gross receipt/source verification, payouts, original-source refunds, late funds and all enabled markets. API keys or sandbox success alone do not resolve eligibility.
 
@@ -1622,7 +1623,7 @@ The buyer pays collection charges; the seller pays payout charges. Show each sep
 ### O16 — Precision, rounding and minimum P2P order — Approved baseline; tax TBD
 
 - USDT amounts: 6 decimal places.
-- Fiat: the currency's official minor units (NGN, GHS, ZAR and KES currently use two decimal places; validate supported provider units).
+- Fiat: the currency's official minor units (NGN, GHS and KES currently use two decimal places; validate supported provider units).
 - Rates: up to 8 decimal places.
 - Round calculated principals and fees once using **round half up**, then persist exact accepted totals and the rule version.
 - Minimum P2P order: 10 USDT. No additional minimum P2P platform fee.
@@ -1639,7 +1640,7 @@ Initiate seller fiat payout first. After verified payout success, credit the buy
 
 ### O19 — KYC and eligibility — Smile ID selected; coverage/documents pending
 
-Customers must be 18 or older. Require government ID plus selfie/liveness verification through a provider/process covering the four launch countries. Financial access requires approved KYC. Identity changes or risk events may trigger reverification. The owner selected **Smile ID for KYC on 7 November 2026** and later reported access to the Sandbox Credentials page. Sandbox access, account eligibility and supported checks/documents for Nigeria, Ghana, South Africa and Kenya remain unverified. Accepted country-specific documents, evidence/finality rules, ongoing restriction/reverification details and related exception handling remain TBD. Bank ownership verification is a separate integration decision; selecting Smile ID for KYC does not establish bank coverage. Follow [Smile ID setup](docs/smile-id-setup.md). Never discard existing financial obligations when eligibility changes.
+Customers must be 18 or older. Require government ID plus selfie/liveness verification through a provider/process covering the three launch countries. Financial access requires approved KYC. Identity changes or risk events may trigger reverification. The owner selected **Smile ID for KYC on 7 November 2026** and later reported access to the Sandbox Credentials page. Sandbox access, account eligibility and supported checks/documents for Nigeria, Ghana and Kenya remain unverified. Accepted country-specific documents, evidence/finality rules, ongoing restriction/reverification details and related exception handling remain TBD. Bank ownership verification is a separate integration decision; selecting Smile ID for KYC does not establish bank coverage. Follow [Smile ID setup](docs/smile-id-setup.md). Never discard existing financial obligations when eligibility changes.
 
 ### O20 — Authentication and account security — Approved baseline; exact limits TBD
 
@@ -1727,7 +1728,7 @@ The question review is complete, but these items remain open. Approval of an exc
 
 | Area | Remaining work | Related IDs |
 |---|---|---|
-| Fiat rails | Eligible provider(s), written contracts and capabilities in all four markets; actual fees and return support | O06/O07/O14/O15 |
+| Fiat rails | Eligible provider(s), written contracts and capabilities in all three markets; actual fees and return support | O06/O07/O14/O15 |
 | Custody | Signing/key management, recovery, network finality/resource policy and tested reconciliation | O02/O03/O25 |
 | Deposit/withdrawal details | Maximum withdrawal limits, deposit gross/net threshold definition and small-receipt treatment | O04 |
 | FX | Provider, conversion freshness/outage methodology, country-change process and tier fiat-limit mapping | O05/O08 |
