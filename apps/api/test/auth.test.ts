@@ -117,12 +117,12 @@ test("server validates country, phone, terms, and password instead of trusting t
     "0",
   );
 });
-test("launch policy and registration support Nigeria, Ghana and Kenya in their local currencies", async () => {
+test("launch policy enables Nigeria while Ghana and Kenya return the country-unavailable message", async () => {
   const policy = await get("auth/policy");
   assert.deepEqual(policy.body.countries, [
-    { code: "NG", name: "Nigeria", currency: "NGN" },
-    { code: "GH", name: "Ghana", currency: "GHS" },
-    { code: "KE", name: "Kenya", currency: "KES" },
+    { code: "NG", name: "Nigeria", currency: "NGN", available: true },
+    { code: "GH", name: "Ghana", currency: "GHS", available: false },
+    { code: "KE", name: "Kenya", currency: "KES", available: false },
   ]);
   for (const [country, phone, currency] of [
     ["NG", "+2348031234567", "NGN"],
@@ -135,37 +135,61 @@ test("launch policy and registration support Nigeria, Ghana and Kenya in their l
       phone,
       email: `launch-${country.toLowerCase()}@example.test`,
     });
-    assert.equal(r.status, 201, JSON.stringify(r.body));
-    assert.equal(r.body.user.currency, currency);
-    assert.equal(r.body.user.marketSupported, true);
+    if (country === "NG") {
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      assert.equal(r.body.user.currency, currency);
+      assert.equal(r.body.user.marketSupported, true);
+    } else {
+      assert.equal(r.status, 400);
+      assert.equal(
+        r.body.message,
+        "Zetmond is not available in your country yet",
+      );
+      assert.deepEqual(r.body.fields.country, [r.body.message]);
+    }
   }
+  assert.equal(
+    (await runtime.db.pool.query("SELECT count(*) FROM users")).rows[0].count,
+    "1",
+  );
+  assert.equal(
+    (await runtime.db.pool.query("SELECT count(*) FROM delivery_outbox"))
+      .rows[0].count,
+    "1",
+  );
 });
 test("legacy unsupported-country accounts retain sign-in but cannot use verification or financial features", async () => {
   const { r, cookie: c } = await registered();
-  await runtime.db.pool.query(
-    "UPDATE users SET country='ZA',email_verified=true,kyc_status='approved' WHERE id=$1",
-    [r.body.user.id],
-  );
-  const me = await get("auth/me", c);
-  assert.equal(me.status, 200);
-  assert.equal(me.body.user.country, "ZA");
-  assert.equal(me.body.user.marketSupported, false);
-  assert.equal(me.body.user.currency, null);
-  assert.equal(me.body.user.financialAccess, false);
-  assert.equal((await get("account/financial-eligibility", c)).status, 403);
-  assert.equal(
-    (await post("identity/sessions", { disclosureVersion: "fixture-v1" }, c))
-      .status,
-    403,
-  );
-  assert.equal((await get("identity", c)).body.available, false);
-  assert.equal((await get("banks", c)).body.canAdd, false);
-  const login = await post("auth/login", {
-    email: input.email,
-    password: input.password,
-  });
-  assert.equal(login.status, 201);
-  assert.equal(login.body.user.marketSupported, false);
+  for (const country of ["GH", "KE", "ZA"]) {
+    await runtime.db.pool.query(
+      "UPDATE users SET country=$2,email_verified=true,kyc_status='approved' WHERE id=$1",
+      [r.body.user.id, country],
+    );
+    const me = await get("auth/me", c);
+    assert.equal(me.status, 200);
+    assert.equal(me.body.user.country, country);
+    assert.equal(
+      me.body.user.availabilityMessage,
+      "Zetmond is not available in your country yet",
+    );
+    assert.equal(me.body.user.marketSupported, false);
+    assert.equal(me.body.user.currency, null);
+    assert.equal(me.body.user.financialAccess, false);
+    assert.equal((await get("account/financial-eligibility", c)).status, 403);
+    assert.equal(
+      (await post("identity/sessions", { disclosureVersion: "fixture-v1" }, c))
+        .status,
+      403,
+    );
+    assert.equal((await get("identity", c)).body.available, false);
+    assert.equal((await get("banks", c)).body.canAdd, false);
+    const login = await post("auth/login", {
+      email: input.email,
+      password: input.password,
+    });
+    assert.equal(login.status, 201);
+    assert.equal(login.body.user.marketSupported, false);
+  }
 });
 test("email verifies once without phone verification; KYC and admin APIs remain blocked", async () => {
   const { cookie: c } = await registered();

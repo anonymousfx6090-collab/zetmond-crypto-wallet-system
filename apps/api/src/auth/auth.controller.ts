@@ -14,7 +14,7 @@ import { Request, Response } from "express";
 import { z } from "zod";
 import { AuthService } from "./auth.service";
 import { deploymentStage } from "../config";
-import { markets } from "../markets";
+import { markets, unavailableCountryMessage } from "../markets";
 import {
   registerSchema,
   loginSchema,
@@ -40,7 +40,13 @@ export class AuthController {
     if (!r.success)
       throw new HttpException(
         {
-          message: "Please check the highlighted fields.",
+          message: r.error.issues.some(
+            (issue) =>
+              issue.path[0] === "country" &&
+              issue.message === unavailableCountryMessage,
+          )
+            ? unavailableCountryMessage
+            : "Please check the highlighted fields.",
           fields: r.error.flatten().fieldErrors,
         },
         400,
@@ -72,6 +78,7 @@ export class AuthController {
   @Get("auth/policy") policy() {
     return {
       countries: markets,
+      unavailableCountryMessage,
       termsVersion: this.auth.config.TERMS_VERSION,
       termsUrl: this.auth.config.TERMS_URL,
       privacyUrl: this.auth.config.PRIVACY_URL,

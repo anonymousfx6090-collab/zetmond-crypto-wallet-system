@@ -125,6 +125,16 @@ export default function AccountApp({ screen }) {
     [sessions, setSessions] = useState([]),
     [resetToken, setResetToken] = useState(""),
     [done, setDone] = useState(false);
+  const [registrationCountry, setRegistrationCountry] = useState("");
+  const countryUnavailable =
+    !!registrationCountry &&
+    !policy?.countries.some(
+      (country) =>
+        country.code === registrationCountry && country.available === true,
+    );
+  const countryUnavailableMessage =
+    policy?.unavailableCountryMessage ||
+    "Zetmond is not available in your country yet";
   const errorRef = useRef(null);
   const publicScreen = [
     "login",
@@ -201,8 +211,12 @@ export default function AccountApp({ screen }) {
       <FormField name={name} label={label} error={fields[name]} {...options} />
     );
   }
-  const submit = (label) => (
-    <button className="primary" type="submit" disabled={busy || loading}>
+  const submit = (label, disabled = false) => (
+    <button
+      className="primary"
+      type="submit"
+      disabled={busy || loading || disabled}
+    >
       {busy ? "Please wait…" : label}
       {busy ? (
         <Loader2 size={18} className="spinner" aria-hidden="true" />
@@ -222,6 +236,15 @@ export default function AccountApp({ screen }) {
   async function register(e) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    if (
+      !policy?.countries.some(
+        (country) =>
+          country.code === f.get("country") && country.available === true,
+      )
+    ) {
+      setError(countryUnavailableMessage);
+      return;
+    }
     await action(async () => {
       const d = await api("auth/register", {
         ...Object.fromEntries(f),
@@ -354,15 +377,29 @@ export default function AccountApp({ screen }) {
                 id="country"
                 aria-label="Country"
                 name="country"
+                value={registrationCountry}
+                onChange={(event) => {
+                  setRegistrationCountry(event.target.value);
+                  setFields(({ country, ...rest }) => rest);
+                  setError("");
+                }}
                 autoComplete="country"
                 required
-                aria-invalid={!!fields.country}
-                aria-describedby={fields.country ? "country-error" : undefined}
+                aria-invalid={!!fields.country || countryUnavailable}
+                aria-describedby={
+                  [
+                    fields.country ? "country-error" : "",
+                    countryUnavailable ? "country-unavailable" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || undefined
+                }
               >
                 <option value="">Select your country</option>
                 {policy?.countries.map((c) => (
                   <option key={c.code} value={c.code}>
                     {c.name} · {c.currency}
+                    {c.available ? "" : " · Coming soon"}
                   </option>
                 ))}
               </select>
@@ -373,6 +410,11 @@ export default function AccountApp({ screen }) {
               </span>
             )}
           </div>
+          {countryUnavailable && (
+            <p id="country-unavailable" className="notice" role="status">
+              {countryUnavailableMessage}
+            </p>
+          )}
           {field("phone", "Phone number", {
             type: "tel",
             autoComplete: "tel",
@@ -418,7 +460,7 @@ export default function AccountApp({ screen }) {
               not available yet.
             </p>
           )}
-          {submit("Create account")}
+          {submit("Create account", countryUnavailable || !registrationCountry)}
           <p className="switch-form">
             Already part of Zetmond?{" "}
             <Link href="/login">
@@ -635,8 +677,7 @@ export default function AccountApp({ screen }) {
         <>
           {user.marketSupported === false && (
             <p className="notice" role="note">
-              Zetmond currently supports Nigeria, Ghana and Kenya. Verification
-              and financial features are unavailable for this account country.
+              {user.availabilityMessage || countryUnavailableMessage}
             </p>
           )}
           <section className="profile-banner" aria-label="Your profile">

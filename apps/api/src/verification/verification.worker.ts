@@ -7,6 +7,7 @@ import {
   bankNamePolicyVersion,
   bankPoliciesCurrent,
   compareBankOwnerNames,
+  bankIdentityCurrent,
 } from "./bank-ownership-policy";
 
 /** PostgreSQL is authoritative. Leases fence crashed workers; provider calls use the persisted
@@ -103,7 +104,7 @@ export class VerificationWorker {
           (identity
             ? a?.id === target.id
             : u.kyc_status === "approved" &&
-              a?.id === target.identity_attempt_id &&
+              bankIdentityCurrent(target, a) &&
               a?.status === "approved" &&
               a.country === u.country &&
               a.mode === s.mode &&
@@ -206,7 +207,7 @@ export class VerificationWorker {
           (identity
             ? a?.id === target.id
             : u.kyc_status === "approved" &&
-              a?.id === target.identity_attempt_id &&
+              bankIdentityCurrent(current, a) &&
               a?.status === "approved" &&
               a.country === u.country &&
               a.mode === s.mode &&
@@ -395,7 +396,7 @@ export class VerificationWorker {
         u.kyc_status === "approved" &&
         isSupportedCountry(u.country) &&
         current.country === u.country &&
-        a?.id === current.identity_attempt_id &&
+        bankIdentityCurrent(current, a) &&
         a?.status === "approved" &&
         a.country === u.country &&
         a.mode === s.mode &&

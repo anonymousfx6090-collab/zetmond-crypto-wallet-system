@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
-import { countries } from "../markets";
+import {
+  countries,
+  isSupportedCountry,
+  unavailableCountryMessage,
+} from "../markets";
 export const email = z.string().trim().toLowerCase().email().max(254);
 export const password = z.string().min(12).max(128);
 export const registerSchema = z
@@ -17,6 +21,12 @@ export const registerSchema = z
   })
   .strict()
   .superRefine((v, ctx) => {
+    if (!isSupportedCountry(v.country))
+      ctx.addIssue({
+        code: "custom",
+        path: ["country"],
+        message: unavailableCountryMessage,
+      });
     const phone = parsePhoneNumberFromString(v.phone);
     if (!phone?.isValid() || phone.country !== v.country)
       ctx.addIssue({
@@ -53,6 +63,7 @@ export const stepSchema = z
       "contact_change",
       "withdrawal",
       "bank_add",
+      "bank_reverify",
     ]),
     operationDigest: z.string().regex(/^[a-f0-9]{64}$/),
     code: z.string().min(6).max(80),

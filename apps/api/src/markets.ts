@@ -1,5 +1,8 @@
 export const countries = ["NG", "GH", "KE"] as const;
 export type Country = (typeof countries)[number];
+export const supportedCountries = ["NG"] as const;
+export const unavailableCountryMessage =
+  "Zetmond is not available in your country yet";
 
 export const currency: Record<Country, string> = {
   NG: "NGN",
@@ -15,8 +18,9 @@ export const markets = countries.map((code) => ({
   code,
   name: names[code],
   currency: currency[code],
+  available: isSupportedCountry(code),
 }));
 
 export function isSupportedCountry(value: unknown): value is Country {
-  return countries.some((country) => country === value);
+  return supportedCountries.some((country) => country === value);
 }

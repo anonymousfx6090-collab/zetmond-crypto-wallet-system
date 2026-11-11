@@ -1,7 +1,7 @@
 import { HttpException } from "@nestjs/common";
 import { PoolClient } from "pg";
 import { AuthService } from "../auth/auth.service";
-import { isSupportedCountry } from "../markets";
+import { isSupportedCountry, unavailableCountryMessage } from "../markets";
 export class Eligibility {
   constructor(private auth: AuthService) {}
   async customer(c: PoolClient, session?: string) {
@@ -14,10 +14,7 @@ export class Eligibility {
   }
   identity(user: any) {
     if (!isSupportedCountry(user.country))
-      throw new HttpException(
-        { message: "Verification is unavailable for this account country." },
-        403,
-      );
+      throw new HttpException({ message: unavailableCountryMessage }, 403);
     if (!user.email_verified)
       throw new HttpException(
         { message: "Verify your email before verifying your identity." },

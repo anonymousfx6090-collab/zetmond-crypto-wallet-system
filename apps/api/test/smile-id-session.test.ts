@@ -237,8 +237,8 @@ test("consent accepts at most one minute of future clock skew", () => {
     isError("invalid_request"),
   );
 });
-test("country bindings stay explicit for every enabled launch market", async () => {
-  for (const country of ["NG", "GH", "KE"] as const) {
+test("Nigeria receives an explicitly bound token while deferred countries cannot send token requests", async () => {
+  for (const country of ["NG"] as const) {
     const c = client(async (_, options) => {
       assert.equal(
         JSON.parse(String((options!.body as FormData).get("payload"))).country,
@@ -250,6 +250,18 @@ test("country bindings stay explicit for every enabled launch market", async () 
       await c.issueDocumentSessionToken(input({ country })),
       jwt(country),
     );
+  }
+  for (const country of ["GH", "KE"] as const) {
+    let calls = 0;
+    const c = client(async () => {
+      calls++;
+      return json({ token: jwt(country) });
+    });
+    await assert.rejects(
+      c.issueDocumentSessionToken(input({ country })),
+      isError("invalid_request"),
+    );
+    assert.equal(calls, 0);
   }
 });
 test("live session tokens are minted only on the fixed live token origin", async () => {

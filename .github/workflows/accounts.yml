@@ -6,7 +6,7 @@ permissions:
   contents: read
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       postgres:
@@ -42,7 +42,9 @@ jobs:
           node-version: "24"
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      # Ubuntu 24.04 runners provide Chromium's runtime libraries. Install the
+      # pinned browser without extra font downloads from the runner's APT mirror.
+      - run: pnpm exec playwright install chromium
       - run: pnpm test:auth
       - run: pnpm build:auth
       - run: pnpm test:auth:browser

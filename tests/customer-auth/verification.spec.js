@@ -286,6 +286,143 @@ test("bank review states explain held ownership and do not offer retries under a
     page.getByText("Ownership verified", { exact: true }),
   ).toHaveCount(0);
 });
+test("bank renewal authorizes masked saved details and recovers an uncertain submission without a second authorization", async ({
+  page,
+}) => {
+  // UI contract fixtures only; real grants, ownership and races are covered by API integration tests.
+  const sourceId = "631d1fb8-d8eb-4c44-b1b5-849276648a21";
+  const state = {
+    country: "NG",
+    currency: "NGN",
+    mode: "sandbox",
+    available: true,
+    identityVerified: true,
+    emailVerified: true,
+    mfaEnabled: true,
+    canAdd: true,
+    banks: [{ code: "fixture-bank", name: "Fixture Bank" }],
+    field: {
+      label: "Account number",
+      pattern: "[0-9]{10}",
+      minLength: 10,
+      maxLength: 10,
+      inputMode: "numeric",
+    },
+    destinations: [
+      {
+        id: sourceId,
+        bankName: "Fixture Bank",
+        maskedAccount: "•••• 7890",
+        currency: "NGN",
+        status: "under_review",
+        usable: false,
+        needsReverification: true,
+      },
+    ],
+  };
+  let operationId,
+    submitted = false,
+    authorizations = 0,
+    commits = 0,
+    preparations = 0;
+  await page.route("**/api/banks", (route) => route.fulfill({ json: state }));
+  await page.route(
+    `**/api/banks/${sourceId}/reverifications/prepare`,
+    async (route) => {
+      const body = route.request().postDataJSON();
+      expect(Object.keys(body)).toEqual(["operationId"]);
+      if (operationId) expect(body.operationId).toBe(operationId);
+      operationId = body.operationId;
+      preparations++;
+      if (submitted) {
+        state.destinations = [
+          {
+            ...state.destinations[0],
+            id: operationId,
+            status: "pending",
+            needsReverification: false,
+            replacesId: sourceId,
+          },
+          {
+            ...state.destinations[0],
+            status: "inactive",
+            needsReverification: false,
+          },
+        ];
+        await route.fulfill({
+          json: { alreadySubmitted: true, id: operationId, status: "pending" },
+        });
+      } else
+        await route.fulfill({
+          json: { alreadySubmitted: false, operationDigest: "f".repeat(64) },
+        });
+    },
+  );
+  await page.route("**/api/auth/step-up", async (route) => {
+    const body = route.request().postDataJSON();
+    expect(body).toEqual({
+      purpose: "bank_reverify",
+      operationDigest: "f".repeat(64),
+      code: "123456",
+    });
+    authorizations++;
+    await route.fulfill({
+      json: { stepUpId: "00000000-0000-4000-8000-000000000002" },
+    });
+  });
+  await page.route(
+    `**/api/banks/${sourceId}/reverifications`,
+    async (route) => {
+      expect(route.request().postDataJSON()).toEqual({
+        operationId,
+        stepUpId: "00000000-0000-4000-8000-000000000002",
+      });
+      submitted = true;
+      commits++;
+      // The server committed, but the browser received an uncertain response.
+      await route.fulfill({
+        status: 503,
+        json: { message: "Please retry safely." },
+      });
+    },
+  );
+  await page.goto("/banks");
+  const form = page.getByRole("form", {
+    name: "Verify Fixture Bank •••• 7890 again",
+  });
+  await expect(form).toBeVisible();
+  await expect(form.locator("input")).toHaveCount(1);
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 950 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth + 1,
+      ),
+    ).toBe(true);
+  }
+  await form.getByLabel("Authenticator or recovery code").fill("123456");
+  await form.getByRole("button", { name: "Verify again", exact: true }).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Please retry safely" }),
+  ).toBeFocused();
+  await expect(form.getByLabel("Authenticator or recovery code")).toHaveValue(
+    "",
+  );
+  await form.getByLabel("Authenticator or recovery code").fill("654321");
+  await form.getByRole("button", { name: "Verify again", exact: true }).click();
+  await expect(
+    page.getByText(
+      "Bank verification restarted. We’re checking ownership again.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("status", { name: "Bank ownership status" }),
+  ).toHaveText(["Checking ownership", "Inactive"]);
+  expect(preparations).toBe(2);
+  expect(authorizations).toBe(1);
+  expect(commits).toBe(1);
+});
+
 test("verification API errors are accessible and revoked sessions return to login", async ({
   page,
 }) => {

@@ -107,4 +107,37 @@ export class VerificationController {
       parse(z.string().uuid(), id),
     );
   }
+  @Post("banks/:id/reverifications/prepare") prepareReverification(
+    @Req() req: Request,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    const input = parse(
+      z.object({ operationId: z.string().uuid() }).strict(),
+      body,
+    );
+    return this.service.prepareBankReverification(
+      this.session(req),
+      parse(z.string().uuid(), id),
+      input.operationId,
+    );
+  }
+  @Post("banks/:id/reverifications") reverify(
+    @Req() req: Request,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    const input = parse(
+      z
+        .object({ operationId: z.string().uuid(), stepUpId: z.string().uuid() })
+        .strict(),
+      body,
+    );
+    return this.service.reverifyBank(
+      this.session(req),
+      parse(z.string().uuid(), id),
+      input.operationId,
+      input.stepUpId,
+    );
+  }
 }
