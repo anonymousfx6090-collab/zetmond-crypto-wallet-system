@@ -41,6 +41,9 @@ export async function startVerificationQueue(
   queue.on("error", report);
   worker.on("error", report);
   worker.on("failed", report);
+  // Both worker connections must finish initialization before the caller can
+  // stop/restart it; closing a still-initializing connection can reject pending commands.
+  await worker.waitUntilReady();
   await queue.upsertJobScheduler(
     "verification-pump",
     { every: 5000 },
