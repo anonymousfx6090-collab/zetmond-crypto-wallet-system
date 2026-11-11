@@ -2,9 +2,11 @@
 
 Research recorded 9 November 2026 for **Nigeria/NGN, Ghana/GHS and Kenya/KES only**, following the owner's removal of South Africa. Smile ID remains the selected identity provider. No bank provider, paid service, commercial contract or live collection is activated by this review.
 
+**Scope update, 11 November: launch Nigeria/NGN only.** Ghana and Kenya are deferred and show the country-unavailable message; their capability research is future work. Monnify is being evaluated for Nigerian bank verification. The historical three-country research below does not enable those markets or make their provider readiness a prerequisite for Nigeria's initial integration.
+
 ## Recommendation and evidence limits
 
-Evaluate **Mono's provider-hosted bank connection** first. Its published Connect SDK explicitly documents authenticated bank linking and an Account Match feature. This is useful evidence for a bank-control journey, followed by server-side comparison with the customer's verified Smile ID identity. It is a candidate recommendation, not a claim of complete three-country coverage or crypto-business eligibility.
+Evaluate **Monnify's Nigerian BVN/account-matching services** alongside **Mono's provider-hosted bank connection**. Monnify's vendor-published SDK/tool definitions now establish specific Nigerian bank-name and BVN/account-match operations; see the [Monnify evaluation](task-3-monnify-review.md) for the endpoint-version discrepancy, identity-binding and sandbox gaps. Mono's Connect SDK documents bank linking and Account Match. Neither evaluation establishes complete three-country coverage, account-backed ownership evidence or crypto-business eligibility.
 
 The customer's browser must not send banking passwords to Zetmond. The provider's window handles connection, and the backend must independently exchange the returned code and fetch the authoritative account/identity. Browser success or `check_account_match: true` alone cannot mark a destination verified. A plain bank-account-name lookup is insufficient proof of control.
 
@@ -35,7 +37,7 @@ Kenyan mobile-money wallets are not silently treated as bank accounts. Additiona
 
 ## Working bank flow
 
-Continue with the recommended provider-hosted bank connection as the working design. The owner has not explicitly chosen a vendor or supplied a bank-provider account. Existing account-number forms and safeguards remain usable as the destination-detail step; browser authorization still cannot establish ownership. Actual bank linking requires the current provider contract, supported institutions/countries and a configured account.
+Keep destination records and ownership checks provider-neutral while evaluating Monnify for Nigeria and Mono's hosted connection. Existing account-number forms and safeguards supply the destination-detail step; browser authorization cannot establish bank ownership. The selected flow needs a current provider contract, supported institutions/countries and a configured account. The owner has no bank-provider account yet, and no adapter is activated by this evaluation.
 
 ## Implemented ownership checks
 
@@ -43,7 +45,9 @@ Migration `006_bank_ownership_policy.sql` adds destination-owned `provider_polic
 
 The worker still requires independently authenticated ownership evidence, current customer/market/mode, destination fingerprint, identity-attempt binding, explicit provider ownership/match flags and the exact pinned provider policy. It then independently compares the returned holder name with the encrypted current KYC name. Local `zetmond-exact-name-v1` accepts only casing, spacing and Unicode NFC equivalence. Missing, different, partial, reordered, company, transliterated, punctuation-altered or control-character names are held for review. This comparison only restricts a provider decision; it never proves account control or replaces a vendor's ownership check.
 
-Name conflicts retain minimal encrypted evidence and their provider revision. A newer authenticated provider result is checked again; review does not become a permanent mismatch. Public listings and audit metadata do not reveal holder names or full account numbers. Provider/local policy changes hold work before an external request, retain the original pins, and record one local audit event without inventing a provider revision. Such a destination needs fresh verification under the current policy rather than an automatic retry. A full provider-backed reverification flow and bank retirement/exception policies remain unfinished.
+Name conflicts retain minimal encrypted evidence and their provider revision. A newer authenticated provider result is checked again; review does not become a permanent mismatch. Public listings and audit metadata do not reveal holder names or full account numbers. Provider/local policy changes hold work before an external request, retain the original pins, and record one local audit event without inventing a provider revision. Such a destination needs fresh verification under the current policy rather than an automatic retry.
+
+The provider-neutral renewal flow now prepares an opaque operation digest from the server's saved bank, current KYC attempt/revision, provider/mode and policy versions. Fresh `bank_reverify` MFA authorizes that exact intent. Creation of the successor, consumption of the grant, inactivation of the already-outdated source and job enqueue commit together. Migration `008_bank_reverification.sql` preserves the original encrypted details/evidence and decision history, links the successor, pins its KYC revision, and permits only one current destination for the same account. A changed or missing KYC revision prevents usability and provider work until freshly verified; historical pins are not inferred. Same-operation recovery returns the existing intent; competing renewals cannot create two successors. Current usable records and unrelated banks cannot be retired through this route. Provider-backed acceptance and manual retirement/exception policies remain outstanding.
 
 Listings require a current approved identity with evidence, matching country/mode and both current policies before a destination is usable. They expose a safe renewal flag and an accessible ownership status. The customer sees review/renewal information and cannot request a status retry for an outdated policy. The owner still needs to approve final production matching/exception rules; no provider has been enabled by this prepared conservative guard.
 

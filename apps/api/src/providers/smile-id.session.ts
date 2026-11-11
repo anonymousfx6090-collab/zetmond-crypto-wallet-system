@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { countries } from "../markets";
+import {
+  countries,
+  isSupportedCountry,
+  unavailableCountryMessage,
+} from "../markets";
 import {
   documentTransportLimits,
   smileIdConsentSchema,
@@ -11,7 +15,9 @@ const sessionSchema = z
   .object({
     operationId: z.string().uuid(),
     userId: smileIdUserIdSchema,
-    country: z.enum(countries),
+    country: z
+      .enum(countries)
+      .refine(isSupportedCountry, unavailableCountryMessage),
     email: z.string().email().max(254),
     callbackUrl: smileIdHttpsUrlSchema,
     givenNames: z.string().trim().min(1).max(200).optional(),

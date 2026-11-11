@@ -2,6 +2,24 @@
 // ownership or replaces independently authenticated bank evidence.
 export const bankNamePolicyVersion = "zetmond-exact-name-v1";
 
+export function bankIdentityCurrent(
+  bank: {
+    identity_attempt_id: string;
+    identity_revision: number | string | null;
+  },
+  identity: { id: string; revision: number | string } | undefined,
+): boolean {
+  return (
+    !!identity &&
+    bank.identity_revision !== null &&
+    bank.identity_revision !== undefined &&
+    bank.identity_attempt_id === identity.id &&
+    Number.isSafeInteger(Number(bank.identity_revision)) &&
+    Number(bank.identity_revision) >= 0 &&
+    Number(bank.identity_revision) === Number(identity.revision)
+  );
+}
+
 function comparableName(value: unknown): string | null {
   if (
     typeof value !== "string" ||

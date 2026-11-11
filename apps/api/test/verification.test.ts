@@ -89,7 +89,7 @@ const provider: VerificationProvider = {
           ownershipVerified: true,
           accountFingerprint: input.accountFingerprint,
           identityAttemptId: input.identityAttemptId,
-          policyVersion: "fixture-exact-v1",
+          policyVersion: provider.bankPolicyVersion,
           nameMatch: true,
         },
       });
@@ -129,11 +129,12 @@ const get = (path: string, cookie?: string) => {
   const r = request(server).get("/api/" + path);
   return cookie ? r.set("Cookie", cookie) : r;
 };
-async function customer(email = "verify@example.test") {
+async function customer(email = "verify@example.test", phone?: string) {
   const r = await post("auth/register", {
     email,
     phone:
-      email === "verify@example.test" ? "+2348031234567" : "+2348031234568",
+      phone ||
+      (email === "verify@example.test" ? "+2348031234567" : "+2348031234568"),
     country: "NG",
     password: "Long verification test password!",
     acceptTerms: true,
@@ -239,15 +240,20 @@ beforeEach(async () => {
   starts = 0;
   bankStarts = 0;
   throwOnce = false;
+  provider.bankPolicyVersion = "fixture-exact-v1";
 });
 after(() => runtime.close());
 
 test("removed launch countries cannot dispatch saved identity work", async () => {
-  for (const [email, accountCountry, attemptCountry] of [
+  for (const [index, [email, accountCountry, attemptCountry]] of [
     ["verify@example.test", "ZA", "NG"],
     ["country-scope@example.test", "NG", "ZA"],
-  ]) {
-    const c = await customer(email);
+    ["deferred-gh@example.test", "GH", "NG"],
+    ["deferred-ke@example.test", "KE", "NG"],
+    ["deferred-attempt-gh@example.test", "NG", "GH"],
+    ["deferred-attempt-ke@example.test", "NG", "KE"],
+  ].entries()) {
+    const c = await customer(email, `+23480312345${80 + index}`);
     await runtime.db.pool.query(
       "UPDATE users SET email_verified=true WHERE id=$1",
       [c.id],
@@ -701,6 +707,502 @@ function bankProof(
     },
   };
 }
+async function outdatedBank() {
+  const c = await customer();
+  await approved(c);
+  const { input } = await pendingBank(c);
+  await runtime.verificationWorker.dispatch();
+  const original = (
+    await runtime.db.pool.query("SELECT * FROM bank_destinations WHERE id=$1", [
+      input.operationId,
+    ])
+  ).rows[0];
+  provider.bankPolicyVersion = "fixture-exact-v2";
+  return { c, input, original };
+}
+async function renewalGrant(
+  c: { id: string; cookie: string },
+  sourceId: string,
+  operationId = randomUUID(),
+) {
+  const prepared = await post(
+    `banks/${sourceId}/reverifications/prepare`,
+    { operationId },
+    c.cookie,
+  );
+  assert.equal(prepared.status, 201, JSON.stringify(prepared.body));
+  assert.equal(prepared.body.alreadySubmitted, false);
+  const code = randomBytes(8).toString("hex");
+  await runtime.db.pool.query(
+    "INSERT INTO recovery_codes(user_id,digest) VALUES($1,$2)",
+    [c.id, digest(config.DATA_ENCRYPTION_KEY, code)],
+  );
+  const authorized = await post(
+    "auth/step-up",
+    {
+      purpose: "bank_reverify",
+      operationDigest: prepared.body.operationDigest,
+      code,
+    },
+    c.cookie,
+  );
+  assert.equal(authorized.status, 201, JSON.stringify(authorized.body));
+  return {
+    operationId,
+    stepUpId: authorized.body.stepUpId as string,
+    prepared: prepared.body,
+  };
+}
+async function newerIdentity(c: { id: string }) {
+  const id = randomUUID();
+  await runtime.db.tx(async (db) => {
+    await db.query(
+      `INSERT INTO identity_attempts(id,case_id,provider,mode,country,status,revision,evidence_payload)
+      SELECT $1,a.case_id,a.provider,a.mode,a.country,'approved',0,a.evidence_payload
+      FROM identity_attempts a JOIN identity_cases k ON k.current_attempt_id=a.id WHERE k.user_id=$2`,
+      [id, c.id],
+    );
+    await db.query(
+      "UPDATE identity_cases SET current_attempt_id=$1 WHERE user_id=$2",
+      [id, c.id],
+    );
+  });
+  return id;
+}
+
+test("bank renewal uses fresh MFA and current policies while preserving earlier evidence and history", async () => {
+  const { c, input, original } = await outdatedBank();
+  const approval = await renewalGrant(c, input.operationId);
+  assert.match(approval.prepared.operationDigest, /^[a-f0-9]{64}$/);
+  assert.ok(
+    !JSON.stringify(approval.prepared).includes(original.account_fingerprint),
+  );
+  assert.ok(!JSON.stringify(approval.prepared).includes(input.accountNumber));
+  const body = {
+    operationId: approval.operationId,
+    stepUpId: approval.stepUpId,
+  };
+  for (let attempt = 0; attempt < 2; attempt++)
+    assert.equal(
+      (await post(`banks/${input.operationId}/reverifications`, body, c.cookie))
+        .status,
+      201,
+    );
+  const recovered = await post(
+    `banks/${input.operationId}/reverifications/prepare`,
+    { operationId: approval.operationId },
+    c.cookie,
+  );
+  assert.deepEqual(recovered.body, {
+    alreadySubmitted: true,
+    id: approval.operationId,
+    status: "pending",
+  });
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT count(*) FROM verification_jobs WHERE target_id=$1",
+        [approval.operationId],
+      )
+    ).rows[0].count,
+    "1",
+  );
+  await runtime.verificationWorker.dispatch();
+  const rows = (
+    await runtime.db.pool.query(
+      "SELECT * FROM bank_destinations ORDER BY created_at",
+    )
+  ).rows;
+  assert.equal(rows.length, 2);
+  const old = rows.find((r) => r.id === input.operationId),
+    current = rows.find((r) => r.id === approval.operationId);
+  assert.equal(old.status, "inactive");
+  for (const field of [
+    "revision",
+    "details_payload",
+    "evidence_payload",
+    "identity_attempt_id",
+    "provider_policy_version",
+    "name_match_policy",
+  ])
+    assert.equal(old[field], original[field]);
+  assert.equal(current.replaces_destination_id, old.id);
+  assert.equal(current.provider_policy_version, "fixture-exact-v2");
+  assert.equal(current.status, "verified");
+  assert.equal(current.account_fingerprint, old.account_fingerprint);
+  const view = (await get("banks", c.cookie)).body;
+  assert.equal(
+    view.destinations.find((r: any) => r.id === old.id).needsReverification,
+    false,
+  );
+  assert.equal(
+    view.destinations.find((r: any) => r.id === current.id).usable,
+    true,
+  );
+  assert.ok(!JSON.stringify(view).includes(input.accountNumber));
+  assert.ok(!JSON.stringify(view).includes("Test Customer"));
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT count(*) FROM verification_decisions WHERE target_id=$1",
+        [old.id],
+      )
+    ).rows[0].count,
+    "1",
+  );
+  assert.equal(
+    (await post(`banks/${old.id}/verifications`, {}, c.cookie)).status,
+    409,
+  );
+});
+
+test("bank renewal rejects another owner, arbitrary detail changes and authorization for a different operation", async () => {
+  const { c, input } = await outdatedBank();
+  const approval = await renewalGrant(c, input.operationId);
+  const other = await customer("other@example.test");
+  await approved(other);
+  const prepare = `banks/${input.operationId}/reverifications/prepare`,
+    commit = `banks/${input.operationId}/reverifications`;
+  assert.equal(
+    (await post(prepare, { operationId: randomUUID() }, other.cookie)).status,
+    404,
+  );
+  assert.equal(
+    (
+      await post(
+        commit,
+        { operationId: randomUUID(), stepUpId: approval.stepUpId },
+        other.cookie,
+      )
+    ).status,
+    404,
+  );
+  assert.equal(
+    (
+      await post(
+        prepare,
+        { operationId: randomUUID(), accountNumber: "9999999999" },
+        c.cookie,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await post(
+        commit,
+        {
+          operationId: approval.operationId,
+          stepUpId: approval.stepUpId,
+          provider_policy_version: "client-choice",
+        },
+        c.cookie,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await post(
+        commit,
+        { operationId: randomUUID(), stepUpId: approval.stepUpId },
+        c.cookie,
+      )
+    ).status,
+    403,
+  );
+  const addGrant = await grant(c, {
+    ...input,
+    operationId: approval.operationId,
+  });
+  assert.equal(
+    (
+      await post(
+        commit,
+        { operationId: approval.operationId, stepUpId: addGrant },
+        c.cookie,
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT consumed_at FROM step_ups WHERE id=$1",
+        [approval.stepUpId],
+      )
+    ).rows[0].consumed_at,
+    null,
+  );
+  assert.equal(
+    (await runtime.db.pool.query("SELECT count(*) FROM bank_destinations"))
+      .rows[0].count,
+    "1",
+  );
+});
+
+test("a new KYC attempt marks banks for renewal and invalidates earlier renewal authorization", async () => {
+  const { c, input } = await outdatedBank();
+  provider.bankPolicyVersion = "fixture-exact-v1";
+  assert.equal(
+    (
+      await post(
+        `banks/${input.operationId}/reverifications/prepare`,
+        { operationId: randomUUID() },
+        c.cookie,
+      )
+    ).status,
+    409,
+  );
+  await newerIdentity(c);
+  assert.equal(
+    (await get("banks", c.cookie)).body.destinations[0].needsReverification,
+    true,
+  );
+  const approval = await renewalGrant(c, input.operationId);
+  const latest = await newerIdentity(c);
+  assert.equal(
+    (
+      await post(
+        `banks/${input.operationId}/reverifications`,
+        { operationId: approval.operationId, stepUpId: approval.stepUpId },
+        c.cookie,
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT consumed_at FROM step_ups WHERE id=$1",
+        [approval.stepUpId],
+      )
+    ).rows[0].consumed_at,
+    null,
+  );
+  const fresh = await renewalGrant(c, input.operationId, approval.operationId);
+  assert.notEqual(
+    fresh.prepared.operationDigest,
+    approval.prepared.operationDigest,
+  );
+  assert.equal(
+    (
+      await post(
+        `banks/${input.operationId}/reverifications`,
+        { operationId: fresh.operationId, stepUpId: fresh.stepUpId },
+        c.cookie,
+      )
+    ).status,
+    201,
+  );
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT identity_attempt_id FROM bank_destinations WHERE id=$1",
+        [fresh.operationId],
+      )
+    ).rows[0].identity_attempt_id,
+    latest,
+  );
+});
+
+test("an updated revision within the same KYC attempt invalidates bank usability and earlier renewal approval", async () => {
+  const { c, input, original } = await outdatedBank();
+  provider.bankPolicyVersion = "fixture-exact-v1";
+  assert.equal(
+    (await get("banks", c.cookie)).body.destinations[0].usable,
+    true,
+  );
+  await runtime.db.pool.query(
+    "UPDATE identity_attempts SET revision=revision+1 WHERE id=$1",
+    [original.identity_attempt_id],
+  );
+  const stale = (await get("banks", c.cookie)).body.destinations[0];
+  assert.equal(stale.usable, false);
+  assert.equal(stale.needsReverification, true);
+  const approval = await renewalGrant(c, input.operationId);
+  await runtime.db.pool.query(
+    "UPDATE identity_attempts SET revision=revision+1 WHERE id=$1",
+    [original.identity_attempt_id],
+  );
+  const submit = (stepUpId: string) =>
+    post(
+      `banks/${input.operationId}/reverifications`,
+      { operationId: approval.operationId, stepUpId },
+      c.cookie,
+    );
+  assert.equal((await submit(approval.stepUpId)).status, 403);
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT consumed_at FROM step_ups WHERE id=$1",
+        [approval.stepUpId],
+      )
+    ).rows[0].consumed_at,
+    null,
+  );
+  const fresh = await renewalGrant(c, input.operationId, approval.operationId);
+  assert.notEqual(
+    fresh.prepared.operationDigest,
+    approval.prepared.operationDigest,
+  );
+  assert.equal((await submit(fresh.stepUpId)).status, 201);
+  const saved = (
+    await runtime.db.pool.query(
+      "SELECT identity_revision FROM bank_destinations WHERE id=$1",
+      [approval.operationId],
+    )
+  ).rows[0];
+  assert.equal(
+    Number(saved.identity_revision),
+    Number(original.identity_revision) + 2,
+  );
+  await runtime.verificationWorker.dispatch();
+  assert.equal(
+    (await get("banks", c.cookie)).body.destinations.find(
+      (r: any) => r.id === approval.operationId,
+    ).usable,
+    true,
+  );
+});
+
+test("concurrent renewal requests create one successor and consume only its authorization", async () => {
+  const { c, input } = await outdatedBank();
+  const first = await renewalGrant(c, input.operationId),
+    second = await renewalGrant(c, input.operationId);
+  const responses = await Promise.all(
+    [first, second].map((a) =>
+      post(
+        `banks/${input.operationId}/reverifications`,
+        { operationId: a.operationId, stepUpId: a.stepUpId },
+        c.cookie,
+      ),
+    ),
+  );
+  assert.deepEqual(responses.map((r) => r.status).sort(), [201, 409]);
+  const winner = responses.find((r) => r.status === 201)!.body.id;
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT count(*) FROM bank_destinations WHERE replaces_destination_id=$1",
+        [input.operationId],
+      )
+    ).rows[0].count,
+    "1",
+  );
+  const grants = (
+    await runtime.db.pool.query(
+      "SELECT id,consumed_at FROM step_ups WHERE id=ANY($1::uuid[])",
+      [[first.stepUpId, second.stepUpId]],
+    )
+  ).rows;
+  assert.equal(grants.filter((r) => r.consumed_at).length, 1);
+  const chosen = winner === first.operationId ? first : second;
+  const replay = await post(
+    `banks/${input.operationId}/reverifications`,
+    { operationId: chosen.operationId, stepUpId: chosen.stepUpId },
+    c.cookie,
+  );
+  assert.equal(replay.status, 201);
+  assert.equal(replay.body.id, winner);
+});
+
+test("provider policy changes during bank lookup do not consume a stale renewal grant", async (t) => {
+  const { c, input } = await outdatedBank();
+  const approval = await renewalGrant(c, input.operationId);
+  t.mock.method(provider, "banks", async () => {
+    provider.bankPolicyVersion = "fixture-exact-v3";
+    return [{ code: "fixture-bank", name: "Fixture Bank" }];
+  });
+  assert.equal(
+    (
+      await post(
+        `banks/${input.operationId}/reverifications`,
+        { operationId: approval.operationId, stepUpId: approval.stepUpId },
+        c.cookie,
+      )
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT consumed_at FROM step_ups WHERE id=$1",
+        [approval.stepUpId],
+      )
+    ).rows[0].consumed_at,
+    null,
+  );
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT status FROM bank_destinations WHERE id=$1",
+        [input.operationId],
+      )
+    ).rows[0].status,
+    "verified",
+  );
+  assert.equal(
+    (await runtime.db.pool.query("SELECT count(*) FROM bank_destinations"))
+      .rows[0].count,
+    "1",
+  );
+});
+
+test("a late provider response cannot revive a bank replaced while its check was in flight", async (t) => {
+  const c = await customer();
+  await approved(c);
+  const { input, row } = await pendingBank(c);
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    }),
+    started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+  t.mock.method(provider, "bankStart", async () => {
+    entered();
+    await gate;
+    return bankProof(input, row, "Test Customer");
+  });
+  const work = runtime.verificationWorker.dispatch();
+  try {
+    await started;
+    provider.bankPolicyVersion = "fixture-exact-v2";
+    const approval = await renewalGrant(c, input.operationId);
+    assert.equal(
+      (
+        await post(
+          `banks/${input.operationId}/reverifications`,
+          { operationId: approval.operationId, stepUpId: approval.stepUpId },
+          c.cookie,
+        )
+      ).status,
+      201,
+    );
+  } finally {
+    release();
+    await work;
+  }
+  const old = (
+    await runtime.db.pool.query(
+      "SELECT status,revision FROM bank_destinations WHERE id=$1",
+      [input.operationId],
+    )
+  ).rows[0];
+  assert.equal(old.status, "inactive");
+  assert.equal(Number(old.revision), -1);
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT count(*) FROM verification_decisions WHERE target_id=$1",
+        [input.operationId],
+      )
+    ).rows[0].count,
+    "0",
+  );
+});
+
 test("contradictory bank owner names are held for review despite a provider match flag, and a later result is rechecked", async () => {
   const c = await customer();
   await approved(c);

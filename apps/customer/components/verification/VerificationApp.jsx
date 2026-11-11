@@ -49,6 +49,7 @@ export default function VerificationApp({ screen }) {
   const router = useRouter(),
     errorRef = useRef(null),
     pendingBank = useRef(null),
+    pendingRenewals = useRef(new Map()),
     fetching = useRef(false);
   const [user, setUser] = useState(null),
     [policy, setPolicy] = useState(null),
@@ -147,6 +148,36 @@ export default function VerificationApp({ screen }) {
       pendingBank.current = null;
       form.reset();
       setMessage("Bank account added. We’re checking its ownership.");
+    });
+  }
+  async function reverifyBank(event, bankId) {
+    event.preventDefault();
+    const form = event.currentTarget,
+      code = String(new FormData(form).get("code")).trim();
+    form.elements.code.value = "";
+    if (!pendingRenewals.current.has(bankId))
+      pendingRenewals.current.set(bankId, crypto.randomUUID());
+    const operationId = pendingRenewals.current.get(bankId);
+    await action(async () => {
+      const prepared = await api(`banks/${bankId}/reverifications/prepare`, {
+        operationId,
+      });
+      if (!prepared.alreadySubmitted) {
+        const grant = await api("auth/step-up", {
+          purpose: "bank_reverify",
+          operationDigest: prepared.operationDigest,
+          code,
+        });
+        await api(`banks/${bankId}/reverifications`, {
+          operationId,
+          stepUpId: grant.stepUpId,
+        });
+      }
+      pendingRenewals.current.delete(bankId);
+      form.reset();
+      setMessage(
+        "Bank verification restarted. We’re checking ownership again.",
+      );
     });
   }
   return (
@@ -417,6 +448,34 @@ export default function VerificationApp({ screen }) {
                               available before using this destination.
                             </p>
                           )
+                        )}
+                        {bank.needsReverification && data.canAdd && (
+                          <form
+                            className="bank-form"
+                            onSubmit={(event) => reverifyBank(event, bank.id)}
+                            aria-label={`Verify ${bank.bankName} ${bank.maskedAccount} again`}
+                            autoComplete="off"
+                          >
+                            <p>
+                              Authorize a fresh ownership check for this saved
+                              account.
+                            </p>
+                            <label htmlFor={`renew-${bank.id}`}>
+                              Authenticator or recovery code
+                            </label>
+                            <input
+                              id={`renew-${bank.id}`}
+                              name="code"
+                              required
+                              minLength={6}
+                              maxLength={80}
+                              autoComplete="one-time-code"
+                              disabled={busy}
+                            />
+                            <button className="quiet" disabled={busy}>
+                              {busy ? "Starting verification…" : "Verify again"}
+                            </button>
+                          </form>
                         )}
                       </div>
                       {["pending", "under_review", "unavailable"].includes(

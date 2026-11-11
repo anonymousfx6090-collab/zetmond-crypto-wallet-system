@@ -40,6 +40,8 @@ This revision preserves the uploaded v1.0 production requirements and records th
 
 **Launch-market update — owner-directed 9 November 2026:** support Nigeria/NGN, Ghana/GHS and Kenya/KES only. South Africa/ZAR is removed from the launch scope. This supersedes the previous four-country decision in O01 and applies to signup, verification, bank-provider selection and fiat-market planning. Existing records and financial obligations are retained; a removed country cannot retain verification or financial eligibility through an old approval.
 
+**Launch-market update — owner-directed 11 November 2026:** Nigeria/NGN is the only available launch market for now. Ghana/GHS and Kenya/KES are deferred for later integration. Keep Ghana and Kenya visible as coming-soon country choices; selecting either shows **“Zetmond is not available in your country yet”** and prevents registration. Enforce Nigeria-only eligibility on backend registration, identity/bank verification, queued provider work and financial operations; client-side controls alone are insufficient. Preserve existing records, sign-in and historical obligations without retaining financial eligibility through an earlier approval. This supersedes the 9 November scope and all earlier country-availability entries, including O01. Monnify is being evaluated for Nigerian bank checks; an activated integration or provider approval is not asserted by this decision.
+
 **Current delivery context:** the owner requested delivery within five days on 9 November 2026. Budget and launch volume remain TBD, and development is planned with the product owner and AI assistant. Operational responders, independent assessments and any specialist responsibilities must still be assigned before launch; they are not supplied by this development arrangement.
 
 The original uploaded v1.0 file and the existing main PRD are preserved unchanged. No application implementation or provider selection is claimed by this document.
@@ -1523,10 +1525,11 @@ The following answers were explicitly supplied or approved by the owner in the d
 
 ### O01 — Launch countries and markets — Approved
 
-- Nigeria: NGN (Nigerian naira).
-- Ghana: GHS (Ghanaian cedi).
-- Kenya: KES (Kenyan shilling).
-- Registration and local-currency P2P trading are intended in each of these three markets, subject to eligible providers and launch gates. No cross-currency trading policy or legal eligibility is inferred.
+- Nigeria: NGN (Nigerian naira), the only available launch market for now.
+- Ghana: GHS (Ghanaian cedi), deferred for later integration.
+- Kenya: KES (Kenyan shilling), deferred for later integration.
+- Ghana and Kenya remain visible as coming-soon country choices. Selecting either shows **“Zetmond is not available in your country yet”** and blocks registration; backend eligibility applies the same restriction. Preserve existing account records and sign-in without enabling verification or financial actions for deferred countries.
+- Registration and local-currency P2P trading are initially intended for Nigeria, subject to eligible providers and launch gates. Monnify is being evaluated for Nigerian bank checks. No cross-currency trading policy, activated provider capability or legal eligibility is inferred. This 11 November 2026 decision supersedes the earlier three-country launch scope.
 
 ### O02 — Supported USDT network — Approved
 

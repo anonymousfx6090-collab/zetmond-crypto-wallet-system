@@ -1,5 +1,7 @@
 # Task 3 — KYC and bank verification plan
 
+**Current launch scope — owner-directed 11 November 2026:** Nigeria/NGN only. Ghana and Kenya stay visible as coming-soon choices, show “Zetmond is not available in your country yet” when selected, and cannot register or obtain verification/financial access. Preserve historical records and sign-in. Earlier three-country planning below is retained as future integration research. Monnify is now evaluated for Nigerian bank verification; no bank provider has been activated.
+
 Status: identity/bank records, APIs, screens and durable processing are implemented. The Smile ID V3 adapter and V12 capture journey were merged in PR #7. The owner reported opening the deployed verification page but could not complete a document check; full sandbox capture and callback evidence remain outstanding. Bank-provider selection and integration are unfinished. The 9 November 2026 launch-market change limits support to Nigeria, Ghana and Kenya. See [implementation and handoff](task-3-implementation.md).
 
 This plan follows PRD v1.1 Sections 4, 7.4–7.5, 13.3, 16.7, 17.4 and 21.1, and decisions O01, O19, O20, O22, O25 and O26. O19 now selects Smile ID for KYC. Bank-provider selection, country/document coverage and other policies marked TBD in that PRD remain undecided.

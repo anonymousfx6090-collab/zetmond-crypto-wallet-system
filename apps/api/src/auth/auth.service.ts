@@ -6,7 +6,12 @@ import { Config } from "../config";
 import { Database } from "../db";
 import { digest, hash, seal, token, unseal } from "../crypto";
 import { Delivery } from "../delivery/delivery.service";
-import { Country, currency, isSupportedCountry } from "../markets";
+import {
+  Country,
+  currency,
+  isSupportedCountry,
+  unavailableCountryMessage,
+} from "../markets";
 
 const rejected = (message = "Authentication required.", status = 401) => ({
   error: message,
@@ -93,6 +98,9 @@ export class AuthService {
       country: u.country,
       currency: marketSupported ? currency[u.country as Country] : null,
       marketSupported,
+      availabilityMessage: marketSupported
+        ? undefined
+        : unavailableCountryMessage,
       role: u.role,
       emailVerified: u.email_verified,
       phoneVerified: u.phone_verified,
@@ -185,6 +193,8 @@ export class AuthService {
     return true;
   }
   async register(input: any, agent: string) {
+    if (!isSupportedCountry(input.country))
+      return rejected(unavailableCountryMessage, 403);
     if (input.policyVersion !== this.config.TERMS_VERSION)
       return rejected("Please review the current policy version.", 400);
     const passwordHash = await argon2.hash(input.password, {

@@ -5,10 +5,15 @@ import { z } from "zod";
 import { AuthService } from "../auth/auth.service";
 import { seal, unseal, digest, hash } from "../crypto";
 import { Eligibility } from "../eligibility/eligibility";
-import { countries, isSupportedCountry } from "../markets";
+import {
+  countries,
+  isSupportedCountry,
+  unavailableCountryMessage,
+} from "../markets";
 import {
   bankNamePolicyVersion,
   bankPoliciesCurrent,
+  bankIdentityCurrent,
 } from "./bank-ownership-policy";
 import {
   Country,
@@ -16,6 +21,7 @@ import {
   VerificationProvider,
   currency,
   WebhookContext,
+  BankDetails,
 } from "../providers/verification";
 
 export const fail = (message: string, status = 400): never => {
@@ -59,6 +65,8 @@ export const reasons: Record<string, string> = {
     "The bank account holder details need further review against your verified identity.",
   ownership_policy_changed:
     "This bank destination needs verification under the current policy before it can be used.",
+  reverification_started:
+    "A newer ownership check replaces this verification. Earlier account details and history are retained.",
 };
 export class VerificationService {
   readonly eligibility: Eligibility;
@@ -94,6 +102,7 @@ export class VerificationService {
       : "sandbox";
   }
   provider(kind: "identity" | "bank", country: Country) {
+    if (!isSupportedCountry(country)) return undefined;
     return this.providers.find(
       (p) =>
         p.mode === this.mode &&
@@ -157,7 +166,9 @@ export class VerificationService {
       available: providerMatches,
       unavailableReason: providerMatches
         ? undefined
-        : "Identity verification is not available in your country yet. Please check back later.",
+        : !isSupportedCountry(u.country)
+          ? unavailableCountryMessage
+          : "Identity verification is not available in your country yet. Please check back later.",
       restricted: u.kyc_status === "restricted",
       emailVerified: u.email_verified,
       canStart:
@@ -331,7 +342,7 @@ export class VerificationService {
       const a = await this.currentAttempt(c, u.id);
       const rows = (
         await c.query(
-          "SELECT id,provider,mode,provider_policy_version,name_match_policy,bank_label,last_four,country,currency,status,reason,created_at,identity_attempt_id FROM bank_destinations WHERE user_id=$1 ORDER BY created_at DESC",
+          "SELECT id,provider,mode,provider_policy_version,name_match_policy,bank_label,last_four,country,currency,status,reason,created_at,identity_attempt_id,identity_revision,replaces_destination_id FROM bank_destinations WHERE user_id=$1 ORDER BY created_at DESC",
           [u.id],
         )
       ).rows;
@@ -344,6 +355,7 @@ export class VerificationService {
           mode: this.mode,
           available: !!p,
           identityVerified:
+            isSupportedCountry(u.country) &&
             u.kyc_status === "approved" &&
             a?.status === "approved" &&
             a.country === u.country &&
@@ -360,13 +372,8 @@ export class VerificationService {
             currency: r.currency,
             status: r.status,
             reason: reasons[r.reason],
-            needsReverification:
-              !r.provider_policy_version ||
-              r.name_match_policy !== bankNamePolicyVersion ||
-              r.mode !== this.mode ||
-              (!!p &&
-                (r.provider !== p.id ||
-                  !bankPoliciesCurrent(r, p.bankPolicyVersion))),
+            needsReverification: this.bankNeedsReverification(r, a, p),
+            replacesId: r.replaces_destination_id || undefined,
             usable:
               !!p &&
               r.provider === p.id &&
@@ -376,7 +383,7 @@ export class VerificationService {
               isSupportedCountry(r.country) &&
               r.country === u.country &&
               r.status === "verified" &&
-              r.identity_attempt_id === a?.id &&
+              bankIdentityCurrent(r, a) &&
               a?.status === "approved" &&
               a.country === u.country &&
               a.mode === this.mode &&
@@ -412,7 +419,9 @@ export class VerificationService {
         !result.view.restricted,
       unavailableReason: available
         ? undefined
-        : "Bank verification is not available in your country right now. Please try again later.",
+        : !isSupportedCountry(result.user.country)
+          ? unavailableCountryMessage
+          : "Bank verification is not available in your country right now. Please try again later.",
     };
   }
   async addBank(
@@ -501,8 +510,8 @@ export class VerificationService {
           403,
         );
       await c.query(
-        `INSERT INTO bank_destinations(id,user_id,identity_attempt_id,provider,mode,country,currency,details_payload,account_fingerprint,last_four,bank_label,operation_digest,provider_policy_version,name_match_policy,status)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending')`,
+        `INSERT INTO bank_destinations(id,user_id,identity_attempt_id,provider,mode,country,currency,details_payload,account_fingerprint,last_four,bank_label,operation_digest,provider_policy_version,name_match_policy,identity_revision,status)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'pending')`,
         [
           input.operationId,
           u.id,
@@ -522,6 +531,7 @@ export class VerificationService {
           digest(this.key, operationDigest),
           p.bankPolicyVersion,
           bankNamePolicyVersion,
+          a.revision,
         ],
       );
       await this.enqueue(c, input.operationId, "bank_start");
@@ -530,6 +540,257 @@ export class VerificationService {
         mode: p.mode,
       });
       return { id: input.operationId, status: "pending" };
+    });
+  }
+  private bankNeedsReverification(
+    bank: any,
+    identity: any,
+    provider: VerificationProvider | undefined,
+  ) {
+    return (
+      bank.status !== "inactive" &&
+      (!bank.provider_policy_version ||
+        bank.name_match_policy !== bankNamePolicyVersion ||
+        bank.mode !== this.mode ||
+        bank.identity_revision == null ||
+        (!!identity && !bankIdentityCurrent(bank, identity)) ||
+        (!!provider &&
+          (bank.provider !== provider.id ||
+            !bankPoliciesCurrent(bank, provider.bankPolicyVersion))))
+    );
+  }
+  private async bankRenewalContext(c: PoolClient, user: any, sourceId: string) {
+    const source = (
+      await c.query(
+        "SELECT * FROM bank_destinations WHERE id=$1 AND user_id=$2 FOR UPDATE",
+        [sourceId, user.id],
+      )
+    ).rows[0];
+    if (!source) return fail("Bank account not found.", 404);
+    const identity = await this.currentAttempt(c, user.id);
+    if (
+      !identity ||
+      identity.status !== "approved" ||
+      identity.country !== user.country ||
+      identity.mode !== this.mode ||
+      !identity.evidence_payload
+    )
+      return fail("Current verified identity evidence is required.", 403);
+    if (source.country !== user.country || !isSupportedCountry(source.country))
+      return fail("Use a bank account in your registration country.", 409);
+    const provider = this.provider("bank", user.country);
+    if (!provider)
+      return fail("Bank verification is currently unavailable.", 503);
+    if (!this.bankNeedsReverification(source, identity, provider))
+      return fail(
+        "This bank destination does not need a new verification.",
+        409,
+      );
+    return { source, identity, provider };
+  }
+  private bankRenewalDigest(
+    operationId: string,
+    context: Awaited<ReturnType<VerificationService["bankRenewalContext"]>>,
+  ) {
+    const { source, identity, provider } = context;
+    return hash(
+      JSON.stringify([
+        "bank_reverify",
+        operationId,
+        source.id,
+        source.account_fingerprint,
+        identity.id,
+        Number(identity.revision),
+        provider.id,
+        provider.mode,
+        provider.bankPolicyVersion,
+        bankNamePolicyVersion,
+      ]),
+    );
+  }
+  private async existingBankRenewal(
+    c: PoolClient,
+    userId: string,
+    sourceId: string,
+    operationId: string,
+  ) {
+    const existing = (
+      await c.query("SELECT * FROM bank_destinations WHERE id=$1", [
+        operationId,
+      ])
+    ).rows[0];
+    if (
+      existing &&
+      (existing.user_id !== userId ||
+        existing.replaces_destination_id !== sourceId)
+    )
+      return fail(
+        "This operation cannot be reused for another bank destination.",
+        409,
+      );
+    return existing;
+  }
+  prepareBankReverification(
+    session: string | undefined,
+    sourceId: string,
+    operationId: string,
+  ) {
+    return this.db.tx(async (c) => {
+      const user = await this.eligibility.customer(c, session);
+      this.eligibility.bank(user);
+      const existing = await this.existingBankRenewal(
+        c,
+        user.id,
+        sourceId,
+        operationId,
+      );
+      if (existing)
+        return {
+          alreadySubmitted: true as const,
+          id: existing.id,
+          status: existing.status,
+        };
+      const context = await this.bankRenewalContext(c, user, sourceId);
+      // Only the digest leaves the server; full account details and the keyed fingerprint stay private.
+      return {
+        alreadySubmitted: false as const,
+        operationDigest: this.bankRenewalDigest(operationId, context),
+      };
+    });
+  }
+  async reverifyBank(
+    session: string | undefined,
+    sourceId: string,
+    operationId: string,
+    stepUpId: string,
+  ) {
+    const initial = await this.db.tx(async (c) => {
+      const user = await this.eligibility.customer(c, session);
+      this.eligibility.bank(user);
+      const existing = await this.existingBankRenewal(
+        c,
+        user.id,
+        sourceId,
+        operationId,
+      );
+      if (existing)
+        return { submitted: { id: existing.id, status: existing.status } };
+      const context = await this.bankRenewalContext(c, user, sourceId);
+      const details = unseal<BankDetails>(
+        this.key,
+        context.source.details_payload,
+      );
+      if (
+        details.country !== context.source.country ||
+        digest(
+          this.key,
+          JSON.stringify([
+            details.country,
+            details.bankCode,
+            details.accountNumber,
+          ]),
+        ) !== context.source.account_fingerprint
+      )
+        return fail(
+          "Saved bank details cannot be verified. Contact support.",
+          409,
+        );
+      return {
+        context,
+        details,
+        policyVersion: context.provider.bankPolicyVersion,
+      };
+    });
+    if (initial.submitted) return initial.submitted;
+    const { context, details, policyVersion } = initial;
+    let bank;
+    try {
+      bank = (await context.provider.banks(details.country)).find(
+        (v) => v.code === details.bankCode,
+      );
+      const field = context.provider.bankField(details.country);
+      if (
+        !bank ||
+        details.accountNumber.length < field.minLength ||
+        details.accountNumber.length > field.maxLength ||
+        !new RegExp(`^(?:${field.pattern})$`).test(details.accountNumber)
+      )
+        return fail(
+          "Saved bank details are not supported by the current verification service.",
+          409,
+        );
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      return fail(
+        "Bank verification is currently unavailable. Please retry safely.",
+        503,
+      );
+    }
+    return this.db.tx(async (c) => {
+      const user = await this.eligibility.customer(c, session);
+      this.eligibility.bank(user);
+      const existing = await this.existingBankRenewal(
+        c,
+        user.id,
+        sourceId,
+        operationId,
+      );
+      if (existing) return { id: existing.id, status: existing.status };
+      const current = await this.bankRenewalContext(c, user, sourceId);
+      if (
+        current.provider.id !== context.provider.id ||
+        current.provider.mode !== context.provider.mode ||
+        current.provider.bankPolicyVersion !== policyVersion
+      )
+        return fail(
+          "Bank verification settings changed. Authorize a fresh check.",
+          409,
+        );
+      const operationDigest = this.bankRenewalDigest(operationId, current);
+      const grant = await c.query(
+        "UPDATE step_ups SET consumed_at=now() WHERE id=$1 AND session_id=$2 AND purpose='bank_reverify' AND operation_digest=$3 AND consumed_at IS NULL AND expires_at>now() RETURNING id",
+        [stepUpId, user.session_id, digest(this.key, operationDigest)],
+      );
+      if (!grant.rowCount)
+        return fail(
+          "Fresh authenticator authorization for this exact bank verification is required.",
+          403,
+        );
+      // This destination was already unusable because its identity/policy binding is outdated.
+      // Keep its provider revision, details, evidence and decisions; do not redirect existing obligations.
+      await c.query(
+        "UPDATE bank_destinations SET status='inactive',reason='reverification_started',updated_at=now() WHERE id=$1",
+        [sourceId],
+      );
+      await c.query(
+        `INSERT INTO bank_destinations(id,user_id,identity_attempt_id,provider,mode,country,currency,details_payload,account_fingerprint,last_four,bank_label,operation_digest,provider_policy_version,name_match_policy,replaces_destination_id,identity_revision,status)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pending')`,
+        [
+          operationId,
+          user.id,
+          current.identity.id,
+          current.provider.id,
+          current.provider.mode,
+          current.source.country,
+          currency[current.source.country as Country],
+          current.source.details_payload,
+          current.source.account_fingerprint,
+          current.source.last_four,
+          bank!.name,
+          digest(this.key, operationDigest),
+          current.provider.bankPolicyVersion,
+          bankNamePolicyVersion,
+          sourceId,
+          current.identity.revision,
+        ],
+      );
+      await this.enqueue(c, operationId, "bank_start");
+      await this.auth.audit(c, user.id, "bank_reverification_started", {
+        previousDestinationId: sourceId,
+        destinationId: operationId,
+        mode: current.provider.mode,
+      });
+      return { id: operationId, status: "pending" };
     });
   }
   retryBank(session: string | undefined, id: string) {
@@ -546,7 +807,7 @@ export class VerificationService {
       const a = await this.currentAttempt(c, u.id),
         p = this.provider("bank", u.country);
       if (
-        a?.id !== b.identity_attempt_id ||
+        !bankIdentityCurrent(b, a) ||
         a?.status !== "approved" ||
         a.country !== u.country ||
         b.country !== u.country ||
