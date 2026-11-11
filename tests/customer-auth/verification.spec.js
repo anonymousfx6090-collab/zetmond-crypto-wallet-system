@@ -226,6 +226,66 @@ test("bank form authorizes exact details and shows only masked persisted results
     ),
   ).not.toContain("1234567890");
 });
+test("bank review states explain held ownership and do not offer retries under an outdated policy", async ({
+  page,
+}) => {
+  const destinationId = "631d1fb8-d8eb-4c44-b1b5-849276648a20";
+  let checks = 0;
+  const state = {
+    country: "NG",
+    currency: "NGN",
+    mode: "sandbox",
+    available: true,
+    identityVerified: true,
+    mfaEnabled: true,
+    emailVerified: true,
+    canAdd: false,
+    banks: [],
+    destinations: [
+      {
+        id: destinationId,
+        bankName: "Fixture Bank",
+        maskedAccount: "•••• 7890",
+        currency: "NGN",
+        status: "under_review",
+        usable: false,
+        needsReverification: false,
+        reason:
+          "The bank account holder details need further review against your verified identity.",
+      },
+    ],
+  };
+  await page.route("**/api/banks", (route) => route.fulfill({ json: state }));
+  await page.route("**/api/banks/*/verifications", async (route) => {
+    checks++;
+    expect(route.request().postDataJSON()).toEqual({});
+    await route.fulfill({
+      json: { id: destinationId, status: "under_review" },
+    });
+  });
+  await page.goto("/banks");
+  await expect(
+    page.getByRole("status", { name: "Bank ownership status" }),
+  ).toHaveText("Ownership needs review");
+  await expect(page.getByText(state.destinations[0].reason)).toBeVisible();
+  await page.getByRole("button", { name: "Check status", exact: true }).click();
+  expect(checks).toBe(1);
+  state.destinations[0].needsReverification = true;
+  state.destinations[0].reason =
+    "This bank destination needs verification under the current policy before it can be used.";
+  await page.reload();
+  await expect(
+    page.getByText(
+      "This destination needs a new verification before it can be used.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Check status", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("Ownership verified", { exact: true }),
+  ).toHaveCount(0);
+});
 test("verification API errors are accessible and revoked sessions return to login", async ({
   page,
 }) => {

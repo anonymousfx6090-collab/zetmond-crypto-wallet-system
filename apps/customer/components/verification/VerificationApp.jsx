@@ -24,6 +24,7 @@ const identityLabels = {
 };
 const bankLabels = {
   pending: "Checking ownership",
+  under_review: "Ownership needs review",
   verified: "Ownership verified",
   mismatch: "Ownership did not match",
   unavailable: "Verification unavailable",
@@ -396,19 +397,32 @@ export default function VerificationApp({ screen }) {
                           {bank.maskedAccount} · {bank.currency}
                         </p>
                         <span
+                          role="status"
+                          aria-label="Bank ownership status"
                           className={`status-chip ${bank.status === "verified" ? "complete" : "pending"}`}
                         >
                           {bankLabels[bank.status]}
                         </span>
                         {bank.reason && <p>{bank.reason}</p>}
-                        {bank.status === "verified" && !bank.usable && (
+                        {bank.needsReverification ? (
                           <p>
-                            A current approved identity is needed to use this
-                            destination.
+                            This destination needs a new verification before it
+                            can be used.
                           </p>
+                        ) : (
+                          bank.status === "verified" &&
+                          !bank.usable && (
+                            <p>
+                              Current identity and bank verification must be
+                              available before using this destination.
+                            </p>
+                          )
                         )}
                       </div>
-                      {["pending", "unavailable"].includes(bank.status) &&
+                      {["pending", "under_review", "unavailable"].includes(
+                        bank.status,
+                      ) &&
+                        !bank.needsReverification &&
                         data.available &&
                         data.identityVerified &&
                         data.mfaEnabled && (

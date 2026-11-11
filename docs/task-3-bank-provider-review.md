@@ -19,6 +19,8 @@ Official documentation sites are outside this workspace's current network allowl
 | Dojah           | [`dojah-typescript-sdk` 4.1.0](https://www.npmjs.com/package/dojah-typescript-sdk), [vendor repository](https://github.com/dojah-inc/dojah-sdks)            | Generated Nigeria API exposes `GET /api/v1/kyc/nuban`, bank code/account number and AppId/Authorization; Ghana/Kenya modules inspected contain identity checks                                                                                 | Those country-specific identity modules do not demonstrate Ghana/Kenya bank ownership. A NUBAN lookup does not itself prove customer control or an approved identity match. This SDK is not a complete/current product capability inventory |
 | Paystack        | [`@paystack/paystack-sdk` 1.2.2](https://www.npmjs.com/package/@paystack/paystack-sdk), [official repository](https://github.com/PaystackOSS/paystack-node) | Types expose bank catalog/country input and account-number resolution                                                                                                                                                                          | Catalog country selection is not evidence that account resolution/control checks work in every country. The inspected SDK does not establish Zetmond's required ownership proof or commercial eligibility                                   |
 
+Additional official-source review: Mono's [quickstart at `0cbb99b`](https://github.com/withmono/quickstart/tree/0cbb99bc0361d10bc520c4dba1d83a188ae8357f) and [Prove.js README at `3c70cb9`](https://github.com/withmono/prove.js/blob/3c70cb9eda48cac4e015ffee7fb8ca982a0d0728/README.md) were read without running their code. Prove's README explicitly mentions bank accounts and a backend-initiated request ID, with server retrieval after browser success. It does not supply the initiation/result schema, authenticated ownership binding, current country/bank availability or commercial eligibility. These public examples are additional candidates, not a substitute for the current bank-verification API contract.
+
 The inspected Dojah and Paystack generated account-number parameters are typed as numbers. Zetmond must retain account identifiers as strings to preserve leading zeros. Current provider contracts must settle encoding before integration; the generated type is not authority to coerce customer bank details into a JavaScript number.
 
 ## Three-country matrix
@@ -31,9 +33,23 @@ The inspected Dojah and Paystack generated account-number parameters are typed a
 
 Kenyan mobile-money wallets are not silently treated as bank accounts. Additional mobile-money destinations require their own product decision and provider evidence. No cross-currency destination or other country is enabled.
 
-## Product choice pending
+## Working bank flow
 
-The owner was asked whether to use a provider-hosted bank connection or retain account-number-only entry. The recommendation is the provider-hosted connection, subject to confirmed coverage and eligibility. If account-number entry is retained, it still needs an independently documented proof of ownership; returning a name alone cannot satisfy acceptance. No answer is assumed from elapsed time.
+Continue with the recommended provider-hosted bank connection as the working design. The owner has not explicitly chosen a vendor or supplied a bank-provider account. Existing account-number forms and safeguards remain usable as the destination-detail step; browser authorization still cannot establish ownership. Actual bank linking requires the current provider contract, supported institutions/countries and a configured account.
+
+## Implemented ownership checks
+
+Migration `006_bank_ownership_policy.sql` adds destination-owned `provider_policy_version` and `name_match_policy` pins and a separate `under_review` status. New intents record both policies from server configuration. Existing rows have null pins; they are retained but cannot be used or silently assigned a new verification policy.
+
+The worker still requires independently authenticated ownership evidence, current customer/market/mode, destination fingerprint, identity-attempt binding, explicit provider ownership/match flags and the exact pinned provider policy. It then independently compares the returned holder name with the encrypted current KYC name. Local `zetmond-exact-name-v1` accepts only casing, spacing and Unicode NFC equivalence. Missing, different, partial, reordered, company, transliterated, punctuation-altered or control-character names are held for review. This comparison only restricts a provider decision; it never proves account control or replaces a vendor's ownership check.
+
+Name conflicts retain minimal encrypted evidence and their provider revision. A newer authenticated provider result is checked again; review does not become a permanent mismatch. Public listings and audit metadata do not reveal holder names or full account numbers. Provider/local policy changes hold work before an external request, retain the original pins, and record one local audit event without inventing a provider revision. Such a destination needs fresh verification under the current policy rather than an automatic retry. A full provider-backed reverification flow and bank retirement/exception policies remain unfinished.
+
+Listings require a current approved identity with evidence, matching country/mode and both current policies before a destination is usable. They expose a safe renewal flag and an accessible ownership status. The customer sees review/renewal information and cannot request a status retry for an outdated policy. The owner still needs to approve final production matching/exception rules; no provider has been enabled by this prepared conservative guard.
+
+## Documentation access
+
+Current public Mono documentation returned an environment proxy CONNECT denial (403). A saved network draft adds `docs.mono.co`, `mono.co` and `www.mono.co`, preserving the existing pending Smile ID documentation entry and package-manager preset. The draft save was confirmed; it has not been applied or published by the agent. Review, save and publication are user actions; current-doc access must be retried after the configuration actually changes. No credential values or private environment files were accessed for this work.
 
 ## Implementation handoff
 
@@ -43,8 +59,14 @@ Existing code already supplies owner-scoped bank records, exact-operation MFA, e
 2. Obtain current official API contracts for institution catalog, bank connection/session creation, code exchange, account details/holder identity, authenticated lookup, revocation and webhooks. Confirm explicit server-owned session/customer/operation binding; a browser-editable `reference` is correlation only.
 3. Keep private API credentials server-side. Record a durable intent before starting a potentially chargeable operation; persist the linked provider account and uncertain outcomes before retrying. Never log browser authorization codes, bank credentials or unmasked account data.
 4. Bind each result to the current customer, market, bank/account fingerprint, current Smile ID identity attempt and chosen matching policy. Server-side identity/account checks must run after code exchange; widget success alone cannot verify a destination.
-5. Propose conservative name matching for review: exact comparison after documented casing/whitespace normalization, with missing, conflicting, joint, business or reordered names held for review. Do not infer a fuzzy threshold, strip meaningful characters, or accept an arbitrary typed name as evidence. Production matching/exception and account-retirement policies remain undecided.
+5. Retain the prepared conservative name guard and immutable policy pins. Confirm production matching/exception and retirement/reverification procedures against the actual provider contract before activation. Do not infer a fuzzy threshold, strip meaningful characters, or accept a typed name as ownership evidence.
 6. Preserve KYC, verified email, fresh exact-operation authenticator approval and staging financial denial. Bank-connection consent is an additional acknowledgement, not a replacement for account authorization.
 7. Demonstrate supported sandbox happy path, wrong account, name mismatch, interrupted connection, stale/duplicate callback, code reuse, revoked access, API restart and unsupported-country behavior for each enabled market. Evidence must include authoritative server results, not screenshots or simulated approvals.
 
 The unresolved vendor coverage, endpoint contract and account access prevent claiming a completed bank integration. Unsupported countries/banks continue to show unavailable instead of a fabricated approval.
+
+## Validation of the prepared policy guard
+
+The isolated API TypeScript build and customer production build passed. The full API run completed **146 checks: 145 passed, one optional Redis check skipped**. New cases cover current-policy pins, leading-zero account identifiers, independent holder-name comparison, contradictory provider match flags, encrypted review evidence, newer-result rechecking, outdated/unversioned records without provider calls, immutable provider revisions and rejection of client-supplied policy fields. Removing current KYC evidence also disables bank usability and new additions.
+
+All **23 customer browser cases** passed across the full run and targeted rerun. The new case covers accessible review/renewal states and blocked outdated-policy retries. An existing admin MFA case crossed a 30-second TOTP boundary in the full run; its test now waits for a fresh interval before generating a code and passed on rerun. Production MFA validation was not changed. Browser provider responses remain labeled fixtures; no account-backed bank verification was performed.
