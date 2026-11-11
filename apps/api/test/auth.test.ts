@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import request from "supertest";
 import { authenticator } from "otplib";
 import { randomBytes, randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import nodemailer from "nodemailer";
 import { createApp } from "../src/app";
 import { ConfigurationError, loadConfig } from "../src/config";
@@ -748,13 +749,17 @@ test("email provider delivery retries failure and does not mistake delivery for 
     received = 0;
   t.mock.method(nodemailer, "createTransport", ((options: any) => {
     assert.equal(options.requireTLS, true);
+    assert.equal(options.greetingTimeout, 10000);
+    assert.equal(options.dnsTimeout, 10000);
     return {
       sendMail: async (message: any) => {
         received++;
         assert.equal(message.to, input.email);
         assert.equal(message.from, "accounts@example.com");
         if (!successful) throw new Error("Temporary SMTP failure");
-        return { accepted: [message.to] };
+        return {
+          accepted: [{ address: message.to, name: "Fixture recipient" }],
+        };
       },
     };
   }) as any);
@@ -775,6 +780,9 @@ test("email provider delivery retries failure and does not mistake delivery for 
     ).rows[0];
     assert.equal(out.status, "queued");
     assert.equal(out.attempts, 1);
+    assert.equal(out.last_error_code, "delivery_unknown");
+    const retryDelay = new Date(out.next_attempt_at).getTime() - Date.now();
+    assert.ok(retryDelay > 5000 && retryDelay <= 15000);
     successful = true;
     await runtime.db.pool.query(
       "UPDATE delivery_outbox SET next_attempt_at=now() WHERE channel='email'",
@@ -787,6 +795,7 @@ test("email provider delivery retries failure and does not mistake delivery for 
     ).rows[0];
     assert.equal(out.status, "delivered");
     assert.equal(out.payload, "");
+    assert.equal(out.last_error_code, null);
     assert.equal(received, 2);
     assert.equal(
       (
@@ -800,6 +809,261 @@ test("email provider delivery retries failure and does not mistake delivery for 
   } finally {
     t.mock.restoreAll();
   }
+});
+
+test("resending cancels the obsolete queued code without cancelling password recovery or security notices", async () => {
+  const { cookie: c, r } = await registered();
+  const old = (
+    await runtime.db.pool.query("SELECT id,challenge_id FROM delivery_outbox")
+  ).rows[0];
+  assert.ok(old.challenge_id);
+  assert.equal(
+    (await post("auth/forgot-password", { email: input.email })).status,
+    201,
+  );
+  await runtime.db.tx(async (db) => {
+    await runtime.auth.notice(
+      db,
+      { id: r.body.user.id, email: input.email },
+      "Fixture security notice",
+    );
+  });
+  await runtime.db.pool.query(
+    "UPDATE challenges SET created_at=now()-interval '1 hour' WHERE purpose='email'",
+  );
+  assert.equal(
+    (await post("auth/resend", { purpose: "email" }, c)).status,
+    201,
+  );
+  const rows = (
+    await runtime.db.pool.query(
+      "SELECT o.*,ch.purpose FROM delivery_outbox o LEFT JOIN challenges ch ON ch.id=o.challenge_id",
+    )
+  ).rows;
+  const cancelled = rows.find((row) => row.id === old.id);
+  assert.equal(cancelled.status, "cancelled");
+  assert.equal(cancelled.payload, "");
+  assert.equal(
+    rows.filter((row) => row.status === "queued" && row.purpose === "email")
+      .length,
+    1,
+  );
+  assert.equal(rows.find((row) => row.purpose === "reset").status, "queued");
+  assert.equal(rows.find((row) => row.challenge_id === null).status, "queued");
+});
+
+test("used, exhausted or expired verification challenges are never handed to SMTP", async (t) => {
+  const { Delivery } = await import("../src/delivery/delivery.service");
+  let sends = 0;
+  t.mock.method(nodemailer, "createTransport", (() => ({
+    sendMail: async () => {
+      sends++;
+      return { accepted: [input.email] };
+    },
+  })) as any);
+  const delivery = new Delivery(runtime.db, {
+    ...config,
+    DELIVERY_MODE: "provider",
+    SMTP_HOST: "smtp.example.test",
+    MAIL_FROM: "accounts@example.test",
+  });
+  for (const state of ["used", "exhausted", "expired"]) {
+    await runtime.db.pool.query("TRUNCATE users RESTART IDENTITY CASCADE");
+    const { cookie: c } = await registered();
+    if (state === "exhausted")
+      await runtime.db.pool.query("UPDATE challenges SET attempts=$1", [
+        config.CHALLENGE_ATTEMPTS,
+      ]);
+    else if (state === "expired")
+      await runtime.db.pool.query(
+        "UPDATE challenges SET expires_at=now()-interval '1 second'",
+      );
+    else
+      assert.equal(
+        (
+          await post(
+            "auth/verify",
+            { purpose: "email", code: await contactCode("email") },
+            c,
+          )
+        ).status,
+        201,
+      );
+    await delivery.dispatch();
+    const row = (
+      await runtime.db.pool.query("SELECT status,payload FROM delivery_outbox")
+    ).rows[0];
+    assert.equal(row.status, state === "expired" ? "expired" : "cancelled");
+    assert.equal(row.payload, "");
+  }
+  assert.equal(sends, 0);
+});
+
+test("a slow email does not delay another recipient and overlapping workers do not send it twice", async (t) => {
+  const { Delivery } = await import("../src/delivery/delivery.service");
+  await registered();
+  const fastEmail = "fast-recipient@example.test";
+  assert.equal(
+    (
+      await post("auth/register", {
+        ...input,
+        email: fastEmail,
+        phone: "+2348031234586",
+      })
+    ).status,
+    201,
+  );
+  let releaseSlow!: () => void;
+  const slow = new Promise<void>((resolve) => {
+    releaseSlow = resolve;
+  });
+  const sends: string[] = [];
+  t.mock.method(nodemailer, "createTransport", (() => ({
+    sendMail: async (message: any) => {
+      sends.push(message.to);
+      if (message.to === input.email) await slow;
+      return { accepted: [message.to] };
+    },
+  })) as any);
+  const delivery = new Delivery(runtime.db, {
+    ...config,
+    DELIVERY_MODE: "provider",
+    SMTP_HOST: "smtp.example.test",
+    MAIL_FROM: "accounts@example.test",
+  });
+  const pending = Promise.allSettled([
+    delivery.dispatch(),
+    delivery.dispatch(),
+  ]);
+  try {
+    const deadline = Date.now() + 5000;
+    while (true) {
+      const fast = (
+        await runtime.db.pool.query(
+          "SELECT o.status FROM delivery_outbox o JOIN users u ON u.id=o.user_id WHERE u.email=$1",
+          [fastEmail],
+        )
+      ).rows[0];
+      if (fast.status === "delivered") break;
+      assert.ok(
+        Date.now() < deadline,
+        "The fast email should commit while the first send remains blocked",
+      );
+      await delay(10);
+    }
+    assert.deepEqual(sends.sort(), [input.email, fastEmail].sort());
+    assert.equal(
+      (
+        await runtime.db.pool.query(
+          "SELECT o.status FROM delivery_outbox o JOIN users u ON u.id=o.user_id WHERE u.email=$1",
+          [input.email],
+        )
+      ).rows[0].status,
+      "queued",
+    );
+  } finally {
+    releaseSlow();
+    const results = await pending;
+    assert.ok(results.every((r) => r.status === "fulfilled"));
+  }
+  assert.equal(
+    (
+      await runtime.db.pool.query(
+        "SELECT count(*) FROM delivery_outbox WHERE status='delivered' AND payload=''",
+      )
+    ).rows[0].count,
+    "2",
+  );
+  assert.equal(sends.length, 2);
+});
+
+test("resending does not wait for an earlier email already in flight", async (t) => {
+  const { Delivery } = await import("../src/delivery/delivery.service");
+  const { cookie: c } = await registered();
+  await runtime.db.pool.query(
+    "UPDATE challenges SET created_at=now()-interval '1 hour'",
+  );
+  let releaseSlow!: () => void;
+  const slow = new Promise<void>((resolve) => {
+    releaseSlow = resolve;
+  });
+  let sending = false;
+  t.mock.method(nodemailer, "createTransport", (() => ({
+    sendMail: async (message: any) => {
+      if (!sending) {
+        sending = true;
+        await slow;
+      }
+      return { accepted: [message.to] };
+    },
+  })) as any);
+  const delivery = new Delivery(runtime.db, {
+    ...config,
+    DELIVERY_MODE: "provider",
+    SMTP_HOST: "smtp.example.test",
+    MAIL_FROM: "accounts@example.test",
+  });
+  const pending = delivery.dispatch();
+  try {
+    const deadline = Date.now() + 5000;
+    while (!sending) {
+      assert.ok(Date.now() < deadline, "SMTP fixture should start sending");
+      await delay(10);
+    }
+    const response = await post("auth/resend", { purpose: "email" }, c).timeout(
+      { response: 3000 },
+    );
+    assert.equal(response.status, 201);
+  } finally {
+    releaseSlow();
+    await pending;
+  }
+});
+
+test("SMTP recipient rejection stays queued and stops after five attempts", async (t) => {
+  const { Delivery } = await import("../src/delivery/delivery.service");
+  await registered();
+  let sends = 0;
+  t.mock.method(nodemailer, "createTransport", (() => ({
+    sendMail: async () => {
+      sends++;
+      return { accepted: [], rejected: [input.email] };
+    },
+  })) as any);
+  const delivery = new Delivery(runtime.db, {
+    ...config,
+    DELIVERY_MODE: "provider",
+    SMTP_HOST: "smtp.example.test",
+    MAIL_FROM: "accounts@example.test",
+  });
+  await delivery.dispatch();
+  let row = (
+    await runtime.db.pool.query(
+      "SELECT status,attempts,last_error_code,delivered_at FROM delivery_outbox",
+    )
+  ).rows[0];
+  assert.deepEqual(row, {
+    status: "queued",
+    attempts: 1,
+    last_error_code: "smtp_envelope",
+    delivered_at: null,
+  });
+  await runtime.db.pool.query(
+    "UPDATE delivery_outbox SET attempts=4,next_attempt_at=now()",
+  );
+  await delivery.dispatch();
+  await delivery.dispatch();
+  row = (
+    await runtime.db.pool.query(
+      "SELECT status,attempts,last_error_code FROM delivery_outbox",
+    )
+  ).rows[0];
+  assert.deepEqual(row, {
+    status: "failed",
+    attempts: 5,
+    last_error_code: "smtp_envelope",
+  });
+  assert.equal(sends, 2);
 });
 
 test("expired verification messages are cleared without being delivered", async () => {

@@ -149,9 +149,17 @@ export class AuthService {
       [u.id, purpose],
     );
     await c.query(
+      `UPDATE delivery_outbox SET status='cancelled',payload='' WHERE id IN (
+         SELECT o.id FROM delivery_outbox o JOIN challenges ch ON ch.id=o.challenge_id
+         WHERE ch.user_id=$1 AND ch.purpose=$2 AND o.status IN ('queued','failed')
+         FOR UPDATE OF o SKIP LOCKED)`,
+      [u.id, purpose],
+    );
+    const challengeId = randomUUID();
+    await c.query(
       "INSERT INTO challenges(id,user_id,purpose,digest,expires_at) VALUES($1,$2,$3,$4,now()+make_interval(mins=>$5))",
       [
-        randomUUID(),
+        challengeId,
         u.id,
         purpose,
         digest(this.config.DATA_ENCRYPTION_KEY, code),
@@ -172,6 +180,7 @@ export class AuthService {
         text,
       },
       new Date(Date.now() + this.config.CHALLENGE_MINUTES * 60000),
+      challengeId,
     );
     return true;
   }
