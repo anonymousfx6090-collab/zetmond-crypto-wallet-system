@@ -505,6 +505,10 @@ export default function AccountApp({ screen }) {
                 </p>
               ) : (
                 <>
+                  <p className="small">
+                    Check your inbox and Spam folder. If you request another
+                    code, use the most recent email; earlier codes stop working.
+                  </p>
                   <form onSubmit={verify}>
                     <label className="field" htmlFor="email-code">
                       Six-digit code

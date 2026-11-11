@@ -33,7 +33,7 @@ async function register(page, email, phone) {
 }
 async function messages(email) {
   const r = await db.query(
-    "SELECT o.payload FROM delivery_outbox o JOIN users u ON u.id=o.user_id WHERE u.email=$1 ORDER BY o.created_at",
+    "SELECT o.payload FROM delivery_outbox o JOIN users u ON u.id=o.user_id WHERE u.email=$1 AND o.payload<>'' ORDER BY o.created_at",
     [email],
   );
   return r.rows.map((r) => decrypt(r.payload));
@@ -265,6 +265,40 @@ test("customer registration, email-only verification and login are durable and k
     page.getByRole("link", { name: "Security", exact: true }),
   ).toHaveAttribute("aria-current", "page");
 });
+test("resending replaces the queued email and the latest code verifies the account", async ({
+  page,
+}) => {
+  const email = "resend-flow@example.test";
+  await register(page, email, "+2348031234595");
+  const oldCode = (await messages(email))[0].text.match(/\b\d{6}\b/)[0];
+  // Advance only the isolated fixture's cooldown, without waiting on wall-clock time.
+  await db.query(
+    "UPDATE challenges SET created_at=now()-interval '1 hour' WHERE user_id=(SELECT id FROM users WHERE email=$1)",
+    [email],
+  );
+  await page
+    .getByRole("button", { name: "Send another code", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText(
+    "Verification queued for delivery",
+  );
+  const active = await messages(email);
+  expect(active).toHaveLength(1);
+  const code = active[0].text.match(/\b\d{6}\b/)[0];
+  const field = page.getByLabel("Six-digit code", { exact: true });
+  // Random codes can occasionally repeat; their text alone is not a challenge ID.
+  if (oldCode !== code) {
+    await field.fill(oldCode);
+    await page.getByRole("button", { name: "Verify", exact: true }).click();
+    await expect(
+      page.getByRole("alert", { name: "Account error" }),
+    ).toContainText("Code invalid or expired");
+  }
+  await field.fill(code);
+  await page.getByRole("button", { name: "Verify", exact: true }).click();
+  await expect(page.getByText("Verified", { exact: true })).toBeVisible();
+});
+
 test("mobile registration stays within the viewport and errors are accessible", async ({
   page,
 }) => {

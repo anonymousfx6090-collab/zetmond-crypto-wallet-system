@@ -7,18 +7,16 @@ async function main() {
     config.PORT,
     config.NODE_ENV === "production" ? "0.0.0.0" : "127.0.0.1",
   );
-  let running = false;
-  const timer = setInterval(async () => {
-    if (running) return;
-    running = true;
-    try {
-      await runtime.delivery.dispatch();
-    } catch {
-      console.warn("Delivery worker unavailable");
-    } finally {
-      running = false;
-    }
-  }, 5000);
+  let deliveryWork: Promise<unknown> | undefined;
+  const timer = setInterval(() => {
+    if (deliveryWork) return;
+    deliveryWork = runtime.delivery
+      .dispatch()
+      .catch(() => console.warn("Delivery worker unavailable"))
+      .finally(() => {
+        deliveryWork = undefined;
+      });
+  }, 1000);
   let verificationWork: Promise<unknown> | undefined;
   const verificationTimer = setInterval(() => {
     if (
@@ -39,6 +37,7 @@ async function main() {
   const shutdown = async () => {
     clearInterval(timer);
     clearInterval(verificationTimer);
+    await deliveryWork;
     await verificationWork;
     await runtime.close();
     process.exit(0);
