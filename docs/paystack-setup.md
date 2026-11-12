@@ -2,7 +2,7 @@
 
 The owner selected **Paystack** for Task 3's Nigerian bank integration, replacing Monnify as the working choice. Smile ID remains the identity provider. Nigeria/NGN is the only active launch market; Ghana and Kenya remain deferred.
 
-**Current status:** the server has a read-only Nigerian bank-list and account-name lookup client, with an owner-operated setup check. It is not yet a bank-ownership adapter and is not connected to customer bank approvals. The owner has not created a Paystack account. No provider account, payment, transfer, subscription or production capability was activated.
+**Current status:** the server has a read-only Nigerian bank-list and account-name lookup client, with an owner-operated setup check. It is not yet a bank-ownership adapter and is not connected to customer bank approvals. The owner reports creating a Test Mode account and saving `PAYSTACK_MODE` and `PAYSTACK_SECRET_KEY` on Render. Actual provider connectivity remains unverified. No payment, transfer, subscription or production capability was activated.
 
 ## Create the account
 
@@ -23,6 +23,23 @@ The new settings are used only by the lookup client and owner helper. They do no
 | `PAYSTACK_SECRET_KEY` | The test **secret** key, stored privately on the API side |
 
 The lookup origin is fixed to `https://api.paystack.co` in both modes; the secret key selects the Paystack environment. `live` requires a matching `sk_live_` key, but live lookup support is not production activation. Neither setting belongs in `NEXT_PUBLIC_*` variables. This work does not add the key to, read, or alter any private `.env` file.
+
+### Check through Render logs, without paid Shell
+
+Merge the `feat/paystack-render-check` follow-up and deploy the latest `main` commit on Render. Keep the existing build/start commands and the current `NODE_ENV=production`, `DEPLOYMENT_STAGE=staging` settings.
+
+After the API opens its listening port, a configured staging process runs one background bank-catalogue check. It does not delay startup, repeat on a timer or change verification/financial eligibility. Unconfigured Paystack settings cause no request or log. Production-stage API processes do not run this automatic diagnostic.
+
+In **Render → zetmond-wallet → Logs**, search for **`Paystack bank catalogue check:`** after the new deployment starts:
+
+- A successful line includes `catalogueAvailable: true`, `mode: sandbox`, `country: NG`, a bank count and `ownershipVerificationEnabled: false`. The disabled ownership flag is expected.
+- `authentication_failed` means Paystack returned HTTP 401 or 403; confirm the test secret and account's API access.
+- `provider_unavailable` means the provider request failed, timed out or returned another non-200 status. `invalid_response` means its response failed the contract checks.
+- A configuration message names the fields to check without showing their values.
+
+The diagnostic logs metadata and safe categories only. It never requests a customer account lookup or logs keys, holder names, BVNs, bank account numbers, raw provider errors or response bodies. Share only this safe diagnostic line for follow-up. A success does not establish account-resolution entitlement or completed ownership verification.
+
+### Optional local owner check
 
 Once the account is ready, put these settings in the API process's private environment. From the repository root:
 
