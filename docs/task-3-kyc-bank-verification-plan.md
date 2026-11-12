@@ -1,10 +1,10 @@
 # Task 3 — KYC and bank verification plan
 
-**Current launch scope — owner-directed 11 November 2026:** Nigeria/NGN only. Ghana and Kenya stay visible as coming-soon choices, show “Zetmond is not available in your country yet” when selected, and cannot register or obtain verification/financial access. Preserve historical records and sign-in. Earlier three-country planning below is retained as future integration research. Monnify is now evaluated for Nigerian bank verification; no bank provider has been activated.
+**Current launch scope — owner-directed 11 November 2026:** Nigeria/NGN only. Ghana and Kenya stay visible as coming-soon choices, show “Zetmond is not available in your country yet” when selected, and cannot register or obtain verification/financial access. Preserve historical records and sign-in. Earlier three-country planning below is retained as future integration research. **Paystack is now selected for Nigerian bank integration**, superseding the Monnify evaluation; no bank provider is activated. See [Paystack setup](paystack-setup.md).
 
-Status: identity/bank records, APIs, screens and durable processing are implemented. The Smile ID V3 adapter and V12 capture journey were merged in PR #7. The owner reported opening the deployed verification page but could not complete a document check; full sandbox capture and callback evidence remain outstanding. Bank-provider selection and integration are unfinished. The 9 November 2026 launch-market change limits support to Nigeria, Ghana and Kenya. See [implementation and handoff](task-3-implementation.md).
+Status: identity/bank records, APIs, screens and durable processing are implemented. The Smile ID V3 adapter and V12 capture journey were merged in PR #7. The owner reported opening the deployed verification page but could not complete a document check; full sandbox capture and callback evidence remain outstanding. Paystack's read-only Nigerian catalogue/account-name client and owner setup check are prepared. Its ownership adapter, provider-account setup and actual acceptance evidence are unfinished. See [implementation and handoff](task-3-implementation.md).
 
-This plan follows PRD v1.1 Sections 4, 7.4–7.5, 13.3, 16.7, 17.4 and 21.1, and decisions O01, O19, O20, O22, O25 and O26. O19 now selects Smile ID for KYC. Bank-provider selection, country/document coverage and other policies marked TBD in that PRD remain undecided.
+This plan follows PRD v1.1 Sections 4, 7.4–7.5, 13.3, 16.7, 17.4 and 21.1, and decisions O01, O19, O20, O22, O25 and O26. O19 selects Smile ID for KYC and Paystack for Nigerian bank integration. Actual country/document capabilities and the remaining policies marked TBD still require evidence or decisions.
 
 ## Goal and existing foundation
 
@@ -16,7 +16,7 @@ Current hosts are `https://zetmond.vercel.app` for customers and `https://zetmon
 
 The foundation was developed on `feat/task-3-kyc-bank-verification`; the Smile ID follow-up was merged from `feat/smile-id-client`. The launch-market follow-up is on `feat/task-3-launch-markets`. The sections below retain the delivery requirements; the linked implementation document distinguishes completed code from outstanding provider work.
 
-Launch markets are Nigeria/NGN, Ghana/GHS and Kenya/KES only, following the owner's 9 November 2026 removal of South Africa. Customers must be at least 18 and complete government-ID plus selfie/liveness verification. Email verification is required; phone numbers remain contact data and do not require SMS verification.
+Nigeria/NGN is the current launch market. Ghana/GHS and Kenya/KES remain deferred future markets; South Africa was removed from scope. Customers must be at least 18 and complete government-ID plus selfie/liveness verification. Email verification is required; phone numbers remain contact data and do not require SMS verification.
 
 ## Staging boundaries
 
@@ -42,7 +42,7 @@ Record the decision matrix before committing to an integration:
 | Ghana / GHS   | TBD; confirm supported government IDs and age evidence | TBD; use the provider's Ghana-specific bank schema         | TBD                                                              |
 | Kenya / KES   | TBD; confirm supported government IDs and age evidence | TBD; use the provider's Kenya-specific bank schema         | TBD                                                              |
 
-Use current official documentation, account capabilities and sandbox evidence to fill this matrix. Smile ID is selected for KYC; no price or country coverage has been confirmed, and no bank-verification provider has been selected. KYC and bank verification can use different providers. The [bank-provider review](task-3-bank-provider-review.md) records inspected public SDKs and current gaps. Bank verification is separate from choosing a fiat collection/payout provider; a standard Monnify contract must not be assumed eligible for Zetmond's crypto/P2P model.
+Use current official documentation, account capabilities and sandbox evidence to fill this matrix. Smile ID is selected for KYC and Paystack for Nigerian bank integration; prices and actual account capabilities remain unconfirmed. The [bank-provider review](task-3-bank-provider-review.md) records the pinned Paystack contract, earlier alternatives and current gaps. Bank verification is separate from choosing a fiat collection/payout provider; a payment-provider contract must not be assumed eligible for Zetmond's crypto/P2P model.
 
 Before the affected integration is activated, resolve:
 
@@ -177,13 +177,13 @@ The dynamic webhook notation is a planning shorthand: only explicitly configured
 
 ## Decisions still needed
 
-| Decision                                                       | When it blocks work                                                            |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Smile ID account, country/document coverage and sandbox access | Provider-specific capture, signature handling and verified outcomes            |
-| Bank-verification provider and ownership/name-match policy     | Account schema, trusted match results and exception handling                   |
-| Redis/worker service arrangement                               | Hosted durable background processing and restart evidence                      |
-| Retention, deletion and consent/disclosure rules               | Collection/storage of the affected identity evidence and production activation |
-| Legal operator/contact details and final launch policies       | Real-customer launch; may remain pending during isolated sandbox development   |
+| Decision                                                              | When it blocks work                                                            |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Smile ID account, country/document coverage and sandbox access        | Provider-specific capture, signature handling and verified outcomes            |
+| Paystack account/access, ownership result and final name-match policy | Provider-backed results, account binding and exception handling                |
+| Redis/worker service arrangement                                      | Hosted durable background processing and restart evidence                      |
+| Retention, deletion and consent/disclosure rules                      | Collection/storage of the affected identity evidence and production activation |
+| Legal operator/contact details and final launch policies              | Real-customer launch; may remain pending during isolated sandbox development   |
 
 Budget and provider prices remain TBD; the owner requested delivery within five days on 9 November 2026. Provider-neutral schema, authorization and unavailable-state screens can progress while these choices are resolved, but they do not constitute a working verification integration.
 

@@ -12,10 +12,11 @@ The owner removed South Africa on 9 November 2026. Nigeria/NGN, Ghana/GHS and Ke
 
 The owner reported opening the deployed verification page but had no identity document available to complete the flow. Record this as an owner-reported UI check only; document/liveness completion, callback delivery and final saved verification result remain unproven. Full Smile ID sandbox acceptance stays pending.
 
-Read [bank-provider research](task-3-bank-provider-review.md) for the inspected official SDKs, account-connection recommendation and country/ownership/business-eligibility gaps. No bank provider has been selected or activated by that research.
+The owner has now selected **Paystack** for Nigerian bank integration, superseding Monnify as the working choice. The owner has not created a Paystack account. A server-only bank-list/account-name lookup client and owner preflight are prepared; the ownership adapter and actual Test Mode evidence remain outstanding. Read [Paystack setup](paystack-setup.md) and [bank-provider research](task-3-bank-provider-review.md). Provider selection does not activate bank approvals or fiat rails.
 
 ## Implemented
 
+- `PaystackBankLookupClient`: fixed-origin, server-only Nigerian bank catalog and account-name lookup, validated responses, bounded pagination/timeouts, leading-zero preservation and sanitized errors. `paystack:check` reports only catalogue metadata; it never approves a destination. No Paystack ownership adapter is registered and no private environment file or dependency was changed.
 - `/identity`: authenticated overview, disclosure acknowledgment, hosted-capture handoff, persisted status, correction/resubmission and explicit unavailable/restricted states. Browser return never approves a customer. Open pages refresh after focus, visibility changes and every 15 seconds.
 - `/banks`: identity/authenticator prerequisites, country-specific provider catalog/field contract, exact-operation MFA, encrypted immutable destination records, masked listings and ownership outcomes. Outdated identity/policy bindings can now be renewed with a fresh `bank_reverify` grant; the earlier record and evidence remain stored. No arbitrary customer-supplied owner name or verification flag is accepted. Manual retirement and editing remain absent pending policy.
 - Migrations `004_identity_and_banks.sql`, `005_smile_id_capture.sql`, `006_bank_ownership_policy.sql` and `008_bank_reverification.sql`: current case plus attempts, protected destinations, linked renewal history, immutable decision history, authenticated event inbox and durable operation jobs. Existing customers remain unverified; there is no synthetic migration approval.
@@ -34,6 +35,8 @@ apps/api/migrations/{004_identity_and_banks,005_smile_id_capture,006_bank_owners
 apps/api/src/eligibility/eligibility.ts
 apps/api/src/providers/verification.ts          # Provider contract
 apps/api/src/providers/registry.ts              # Real adapter, explicit opt-in
+apps/api/src/providers/paystack.client.ts        # Read-only bank catalog/name lookup
+apps/api/src/check-paystack.ts                   # Owner-only catalog preflight
 apps/api/src/providers/smile-id.provider.ts      # Durable capture/reconciliation
 apps/api/src/providers/smile-id.result.ts        # Minimal callback projection/checks
 apps/api/src/providers/smile-id.settings.ts      # Private callback capability
@@ -62,15 +65,15 @@ The identity/bank UI is separate from `AccountApp.jsx` and shares its logo, them
 
 **Smile ID is selected for KYC**, following the owner’s decision on 7 November 2026. The owner has since opened Sandbox Credentials; actual authenticated sandbox evidence is still needed. The official Node SDK and its examples have been inspected; the full documentation site is blocked by this workspace’s network policy. The implementation follows the supplied current V3/V12 contracts; real account-enabled capture, country coverage and verified outcomes still need demonstration. See [Smile ID setup and integration findings](smile-id-setup.md).
 
-Treat bank ownership as a separate selection. A bank-account-name lookup alone is insufficient. Require verifiable evidence tied to the exact destination and verified identity, with an agreed matching policy. Do not assume an existing payment provider's contract covers crypto/P2P.
+**Paystack is selected for Nigerian bank verification.** A bank-account-name lookup alone is insufficient. Require verifiable evidence tied to the exact destination and verified identity, with an agreed matching policy. Do not assume the provider's contract covers crypto/P2P or that selecting it for bank checks selects it for collection, payout or refunds.
 
-Monnify is now evaluated for Nigeria using its vendor-published Node SDK and API tool definitions. The [Monnify review](task-3-monnify-review.md) records account-name validation, BVN/account association, the v1/v2 endpoint discrepancy, account-specific requirements and unproven Ghana/Kenya coverage. Smile ID remains the selected KYC provider; there is no activated bank provider.
+The current [Paystack guide](paystack-setup.md) records the official pinned OpenAPI source, supported read-only operations and the missing authenticated customer-identification result contract. HTTP 202 accepts an identification request; it cannot approve bank ownership. The earlier [Monnify review](task-3-monnify-review.md) remains historical research. Smile ID remains the selected KYC provider; no bank provider is activated.
 
-| Market        | KYC provider/documents/liveness                 | Bank schema and ownership evidence                            | Enabled now |
-| ------------- | ----------------------------------------------- | ------------------------------------------------------------- | ----------- |
-| Nigeria / NGN | Smile ID selected; checks/documents unconfirmed | Pending provider and matching policy                          | No          |
-| Ghana / GHS   | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability | No          |
-| Kenya / KES   | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability | No          |
+| Market        | KYC provider/documents/liveness                 | Bank schema and ownership evidence                                     | Enabled now |
+| ------------- | ----------------------------------------------- | ---------------------------------------------------------------------- | ----------- |
+| Nigeria / NGN | Smile ID selected; checks/documents unconfirmed | Paystack selected; read-only lookup prepared, ownership result pending | No          |
+| Ghana / GHS   | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability          | No          |
+| Kenya / KES   | Smile ID selected; checks/documents unconfirmed | Pending country-specific bank schema and ownership capability          | No          |
 
 Before enabling a market for real customers, record supported countries/documents, minimum fields, sandbox and live account eligibility, privacy/consent wording, retention/deletion responsibility, rejection/appeal path, name matching/joint/business-account rules and costs. Bank retirement policy remains undecided. No budget is assumed; the owner has now stated a five-day delivery target.
 
@@ -101,6 +104,8 @@ The [Smile ID setup guide](smile-id-setup.md) gives the exact configuration and 
 Redis is optional for this rollout. To move processing to a separate Render background worker later, configure protected `REDIS_URL`, share the correct database/key/provider settings, start `node apps/api/dist/worker.js`, and set the API's `VERIFICATION_INLINE_WORKER=false`. Apply migrations first and use Redis with no eviction and suitable persistence. The worker exits when no provider is configured.
 
 ## Validation and remaining evidence
+
+Paystack preparation: the frozen pnpm 11.9.0 dependency install and API TypeScript build passed in an isolated source copy excluding private environment files. The complete backend run passed **172 tests, zero skipped**, using disposable local PostgreSQL and Redis. This includes 14 new lookup/preflight checks for Nigerian scope, exact account/bank correlation, leading zeros, credentials/mode, pagination, malformed/oversized responses, HTTP failures, timeouts and safe output. No request was made with real Paystack credentials, no customer identity/BVN was collected and no bank destination was approved. Customer/browser code was unchanged in this follow-up. Account-backed Paystack ownership and Smile ID acceptance evidence remain outstanding.
 
 Results: **41 backend tests and 13 browser tests passed**, including the local Redis recovery test. API TypeScript and customer production builds passed; the updated dependency lockfile passed a frozen install. These results do not establish a vendor integration or live deployment.
 

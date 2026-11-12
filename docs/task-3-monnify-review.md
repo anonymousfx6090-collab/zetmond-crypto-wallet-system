@@ -1,5 +1,7 @@
 # Monnify evaluation for Task 3
 
+**Historical evaluation:** the owner subsequently selected Paystack for Nigerian bank integration. See [Paystack setup and current status](paystack-setup.md). The findings below remain research and do not activate Monnify.
+
 Evaluated 11 November 2026. Monnify is a candidate for **Nigeria/NGN bank
 verification**. Smile ID remains the selected document/selfie KYC provider.
 Nigeria is the only enabled launch market. Ghana/GHS and Kenya/KES are deferred

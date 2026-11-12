@@ -1,0 +1,547 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Paystack bank lookup and customer-identification contract extract",
+    "version": "07c5abc8c34536e98a7755a5338178b4f430b09b",
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "x-zetmond-source": {
+    "repository": "https://github.com/PaystackOSS/openapi",
+    "commit": "07c5abc8c34536e98a7755a5338178b4f430b09b",
+    "file": "dist/paystack.yaml",
+    "note": "Selected paths and their transitive component references, otherwise unchanged. Customer identification is documented for review and is not called by the lookup client."
+  },
+  "servers": [
+    {
+      "url": "https://api.paystack.co",
+      "description": "Base API endpoint"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/bank": {
+      "get": {
+        "tags": ["Bank"],
+        "summary": "List Banks",
+        "description": "List banks supported on Paystack",
+        "operationId": "bank_list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "country",
+            "description": "The country from which to obtain the list of supported banks",
+            "schema": {
+              "type": "string",
+              "enum": ["ghana", "kenya", "nigeria", "south africa"]
+            },
+            "example": "nigeria"
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "description": "The country from which to obtain the list of supported banks",
+            "schema": {
+              "type": "string",
+              "enum": ["GHS", "KES", "NGN", "ZAR"]
+            },
+            "example": "NGN"
+          },
+          {
+            "in": "query",
+            "name": "use_cursor",
+            "description": "A flag to indicate if cursor based pagination should be used",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "perPage",
+            "description": "The number of records to fetch per request",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "The offset to retrieve data from",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "next",
+            "description": "An alphanumeric value returned for every cursor based retrieval, used to\nretrieve the next set of data\n",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "previous",
+            "description": "An alphanumeric value returned for every cursor based retrieval, used to\nretrieve the previous set of data\n",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pay_with_bank_transfer",
+            "description": "A flag to filter for available banks a customer can make a transfer to complete a payment",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pay_with_bank",
+            "description": "A flag to filter for banks a customer can pay directly from",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "enabled_for_verification",
+            "description": "A flag to filter the banks that are supported for account verification in South Africa.\nYou need to combine this with either the `currency` or `country` filter.\n",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "gateway",
+            "description": "The type of gateway for a Nigerian bank",
+            "schema": {
+              "type": "string",
+              "enum": ["emandate", "digitalbankmandate"]
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "description": "Type of financial channel",
+            "schema": {
+              "type": "string",
+              "enum": ["ghipps", "mobile_money", "nuban", "kepss", "basa"]
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_nip_sort_code",
+            "description": "A flag that returns Nigerian banks with their NIP institution code. \nThe returned value can be used in identifying institutions on NIP.\n",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/MiscellaneousListBanksSuccess"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/bank/resolve": {
+      "get": {
+        "tags": ["Bank"],
+        "summary": "Resolve Account Number",
+        "description": "Resolve an account number to confirm the name associated with it",
+        "operationId": "bank_resolveAccountNumber",
+        "parameters": [
+          {
+            "name": "account_number",
+            "description": "The account number of interest",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 22728151
+          },
+          {
+            "name": "bank_code",
+            "description": "The bank code associated with the account number",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 63
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/VerificationResolveAccountNumberSuccess"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "default": {
+            "description": "Server error"
+          }
+        }
+      }
+    },
+    "/customer/{code}/identification": {
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "required": true,
+          "description": "The code for the customer gotten from the response of the customer creation",
+          "schema": {
+            "type": "string"
+          },
+          "example": "CUS_c6wqvwmvwopw4ms"
+        }
+      ],
+      "post": {
+        "tags": ["Customer"],
+        "summary": "Validate Customer",
+        "operationId": "customer_validate",
+        "description": "Validate a customer's identity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerValidate"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerValidate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerValidateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "default": {
+            "description": "Server error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Secret key in the format sk_domain_xxxxxx"
+      }
+    },
+    "responses": {
+      "MiscellaneousListBanksSuccess": {
+        "description": "Miscellaneous List Banks response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MiscellaneousListBanksResponse"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Unauthorized operation",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "status": false,
+              "message": "Invalid key"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Entity not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "status": false,
+              "message": "Entity not found"
+            }
+          }
+        }
+      },
+      "VerificationResolveAccountNumberSuccess": {
+        "description": "Verification Resolve Account Number response",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/VerificationResolveAccountNumberResponse"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "MiscellaneousListBanksResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MiscellaneousListBanksResponseArray"
+            }
+          }
+        },
+        "required": ["status", "message", "data"]
+      },
+      "MiscellaneousListBanksResponseArray": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "longcode": {
+            "type": "string"
+          },
+          "gateway": {
+            "type": "string",
+            "nullable": true
+          },
+          "pay_with_bank": {
+            "type": "boolean"
+          },
+          "supports_transfer": {
+            "type": "boolean"
+          },
+          "available_for_direct_debit": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "country": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "slug",
+          "code",
+          "longcode",
+          "gateway",
+          "pay_with_bank",
+          "supports_transfer",
+          "available_for_direct_debit",
+          "active",
+          "is_deleted",
+          "country",
+          "currency",
+          "type",
+          "id",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean",
+            "description": "An indicator for the state of the request"
+          },
+          "message": {
+            "type": "string",
+            "description": "A short description of the error"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ErrorMeta"
+          },
+          "type": {
+            "type": "string",
+            "description": "A tag to indicate the type of the error"
+          },
+          "code": {
+            "type": "string",
+            "description": "The error code",
+            "enum": ["validation_error", "processor_error", "api_error"]
+          },
+          "errorCodeMappingNotFound": {
+            "type": "boolean",
+            "description": "An indicator for error mapping for the request"
+          }
+        }
+      },
+      "ErrorMeta": {
+        "type": "object",
+        "description": "Extra details to help with a resolution of the error",
+        "properties": {
+          "nextStep": {
+            "type": "string",
+            "description": "A summarised solution for the error"
+          }
+        }
+      },
+      "VerificationResolveAccountNumberResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "account_number": {
+                "type": "string"
+              },
+              "account_name": {
+                "type": "string"
+              },
+              "bank_id": {
+                "type": "integer"
+              }
+            },
+            "required": ["account_number", "account_name", "bank_id"]
+          }
+        },
+        "required": ["status", "message", "data"]
+      },
+      "CustomerValidate": {
+        "type": "object",
+        "required": [
+          "first_name",
+          "last_name",
+          "type",
+          "country",
+          "bvn",
+          "bank_code",
+          "account_number"
+        ],
+        "properties": {
+          "first_name": {
+            "description": "Customer's first name",
+            "type": "string"
+          },
+          "middle_name": {
+            "description": "Customer's middle name",
+            "type": "string"
+          },
+          "last_name": {
+            "description": "Customer's last name",
+            "type": "string"
+          },
+          "type": {
+            "description": "Predefined types of identification.",
+            "type": "string",
+            "default": "bank_account"
+          },
+          "value": {
+            "description": "Customer's identification number.",
+            "type": "string"
+          },
+          "country": {
+            "description": "Two-letter country code of identification issuer",
+            "type": "string"
+          },
+          "bvn": {
+            "description": "Customer's Bank Verification Number",
+            "type": "string"
+          },
+          "bank_code": {
+            "description": "You can get the list of bank codes by calling the List Banks endpoint (https://api.paystack.co/bank).",
+            "type": "string"
+          },
+          "account_number": {
+            "description": "Customer's bank account number.",
+            "type": "string"
+          }
+        },
+        "example": {
+          "first_name": "Jabal",
+          "last_name": "Cedar",
+          "country": "NG",
+          "type": "bank_account",
+          "account_number": "0123456789",
+          "bank_code": "007",
+          "bvn": "20012345677"
+        }
+      },
+      "CustomerValidateResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["status", "message"]
+      }
+    }
+  }
+}
