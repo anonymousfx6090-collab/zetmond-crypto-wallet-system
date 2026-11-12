@@ -2,7 +2,7 @@
 
 **Current launch scope — owner-directed 11 November 2026:** Nigeria/NGN only. Ghana and Kenya stay visible as coming-soon choices, show “Zetmond is not available in your country yet” when selected, and cannot register or obtain verification/financial access. Preserve historical records and sign-in. Earlier three-country planning below is retained as future integration research. **Paystack is now selected for Nigerian bank integration**, superseding the Monnify evaluation; no bank provider is activated. See [Paystack setup](paystack-setup.md).
 
-Status: identity/bank records, APIs, screens and durable processing are implemented. The Smile ID V3 adapter and V12 capture journey were merged in PR #7. The owner reported opening the deployed verification page but could not complete a document check; full sandbox capture and callback evidence remain outstanding. Paystack's read-only Nigerian catalogue/account-name client and owner setup check were merged in PR #12. The owner reports creating a Test Mode account and saving its settings on Render; the follow-up prepares a safe staging startup diagnostic. Connectivity, the ownership adapter, account capabilities and actual acceptance evidence remain unverified. See [implementation and handoff](task-3-implementation.md).
+Status: identity/bank records, APIs, screens and durable processing are implemented. The Smile ID V3 adapter and V12 capture journey were merged in PR #7; a full sandbox document/liveness/callback result remains outstanding. The owner supplied a successful deployed Paystack sandbox catalogue check after PR #15: 287 usable Nigerian entries, five repeated entries and five conflicting codes excluded. The owner confirmed **no BVN collection**. Paystack's inspected BVN-dependent customer-identification operation remains unavailable; a supported ownership method without BVN and actual acceptance evidence are still needed. See [implementation and handoff](task-3-implementation.md).
 
 This plan follows PRD v1.1 Sections 4, 7.4–7.5, 13.3, 16.7, 17.4 and 21.1, and decisions O01, O19, O20, O22, O25 and O26. O19 selects Smile ID for KYC and Paystack for Nigerian bank integration. Actual country/document capabilities and the remaining policies marked TBD still require evidence or decisions.
 
@@ -177,13 +177,13 @@ The dynamic webhook notation is a planning shorthand: only explicitly configured
 
 ## Decisions still needed
 
-| Decision                                                              | When it blocks work                                                            |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Smile ID account, country/document coverage and sandbox access        | Provider-specific capture, signature handling and verified outcomes            |
-| Paystack account/access, ownership result and final name-match policy | Provider-backed results, account binding and exception handling                |
-| Redis/worker service arrangement                                      | Hosted durable background processing and restart evidence                      |
-| Retention, deletion and consent/disclosure rules                      | Collection/storage of the affected identity evidence and production activation |
-| Legal operator/contact details and final launch policies              | Real-customer launch; may remain pending during isolated sandbox development   |
+| Decision                                                                       | When it blocks work                                                            |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Smile ID account, country/document coverage and sandbox access                 | Provider-specific capture, signature handling and verified outcomes            |
+| Ownership method without BVN, authenticated result and final name-match policy | Provider-backed ownership, exact account binding and exception handling        |
+| Redis/worker service arrangement                                               | Hosted durable background processing and restart evidence                      |
+| Retention, deletion and consent/disclosure rules                               | Collection/storage of the affected identity evidence and production activation |
+| Legal operator/contact details and final launch policies                       | Real-customer launch; may remain pending during isolated sandbox development   |
 
 Budget and provider prices remain TBD; the owner requested delivery within five days on 9 November 2026. Provider-neutral schema, authorization and unavailable-state screens can progress while these choices are resolved, but they do not constitute a working verification integration.
 
