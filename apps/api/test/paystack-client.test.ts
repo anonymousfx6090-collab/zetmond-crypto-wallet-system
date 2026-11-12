@@ -41,9 +41,8 @@ test("Paystack catalog stays server-side, Nigeria/NGN/NUBAN-scoped and excludes 
         country: "nigeria",
         currency: "NGN",
         type: "nuban",
-        use_cursor: "false",
+        use_cursor: "true",
         perPage: "100",
-        page: "1",
       });
       assert.equal(options!.method, "GET");
       assert.equal(options!.redirect, "error");
@@ -238,31 +237,89 @@ test("live lookup also uses the fixed Paystack host with the matching server key
   assert.equal((await client.listNigerianBanks()).length, 1);
 });
 
-test("offset pagination covers the catalogue and retains bank codes as strings", async () => {
+test("documented data-only catalogues may exceed 100 entries without synthetic offset requests", async () => {
+  let calls = 0;
+  const catalogue = Array.from({ length: 150 }, (_, index) => ({
+    ...bank,
+    id: index + 1,
+    code: String(index).padStart(3, "0"),
+  }));
+  const client = new PaystackBankLookupClient(
+    { mode: "sandbox", secretKey },
+    async () => {
+      calls++;
+      return json({ status: true, data: catalogue });
+    },
+  );
+  const result = await client.listNigerianBanks();
+  assert.equal(result.length, 150);
+  assert.equal(result[0].code, "000");
+  assert.equal(result.at(-1)!.code, "149");
+  assert.equal(calls, 1);
+});
+
+test("letter-suffixed bank codes are preserved in the catalogue and account lookup", async () => {
+  const alphanumeric = { ...bank, code: "035A" };
+  const client = new PaystackBankLookupClient(
+    { mode: "sandbox", secretKey },
+    async (url) => {
+      const request = new URL(String(url));
+      if (request.pathname === "/bank")
+        return json({ status: true, data: [alphanumeric] });
+      assert.equal(request.searchParams.get("bank_code"), "035A");
+      assert.equal(
+        request.searchParams.get("account_number"),
+        account.accountNumber,
+      );
+      return json({
+        status: true,
+        data: {
+          bank_id: bank.id,
+          account_number: account.accountNumber,
+          account_name: "Fixture Holder",
+        },
+      });
+    },
+  );
+  assert.deepEqual(await client.listNigerianBanks(), [
+    { code: "035A", name: bank.name },
+  ]);
+  assert.deepEqual(
+    await client.resolveNigerianAccount({ ...account, bankCode: "035A" }),
+    { ...account, bankCode: "035A", accountName: "Fixture Holder" },
+  );
+});
+
+test("cursor pagination follows provider cursors without guessing offset pages", async () => {
   const full = Array.from({ length: 100 }, (_, index) => ({
     ...bank,
     id: index + 1,
     code: String(index).padStart(3, "0"),
   }));
-  const pages: string[] = [];
+  const pages: (string | null)[] = [];
+  const next = "fixture+cursor/100=";
   const client = new PaystackBankLookupClient(
     { mode: "sandbox", secretKey },
     async (url) => {
-      const page = new URL(String(url)).searchParams.get("page")!;
+      const parameters = new URL(String(url)).searchParams;
+      assert.equal(parameters.get("page"), null);
+      assert.equal(parameters.get("use_cursor"), "true");
+      const page = parameters.get("next");
       pages.push(page);
       return json({
         status: true,
-        data: page === "1" ? full : [{ ...bank, id: 101, code: "100" }],
+        data: page === null ? full : [{ ...bank, id: 101, code: "100" }],
+        meta: { next: page === null ? next : null },
       });
     },
   );
   const banks = await client.listNigerianBanks();
   assert.equal(banks.length, 101);
   assert.equal(banks[0].code, "000");
-  assert.deepEqual(pages, ["1", "2"]);
+  assert.deepEqual(pages, [null, next]);
 });
 
-test("ignored pagination, conflicting codes and an endless catalogue fail without returning partial data", async () => {
+test("duplicate active codes, repeated cursors and endless pagination never return partial success", async () => {
   const full = Array.from({ length: 100 }, (_, index) => ({
     ...bank,
     id: index + 1,
@@ -273,11 +330,22 @@ test("ignored pagination, conflicting codes and an endless catalogue fail withou
     { mode: "sandbox", secretKey },
     async () => {
       calls++;
-      return json({ status: true, data: full });
+      return json({ status: true, data: [bank, { ...bank, id: 100 }] });
     },
   );
   await assert.rejects(repeated.listNigerianBanks(), fails("invalid_response"));
-  assert.equal(calls, 2);
+  assert.equal(calls, 1);
+  const cursor = new PaystackBankLookupClient(
+    { mode: "sandbox", secretKey },
+    async () =>
+      json({ status: true, data: [], meta: { next: "fixtureRepeatedCursor" } }),
+  );
+  await assert.rejects(
+    cursor.listNigerianBanks(),
+    (error: unknown) =>
+      error instanceof PaystackLookupError &&
+      error.detail === "catalogue_cursor_repeated",
+  );
   calls = 0;
   const endless = new PaystackBankLookupClient(
     { mode: "sandbox", secretKey },
@@ -290,6 +358,7 @@ test("ignored pagination, conflicting codes and an endless catalogue fail withou
           id: offset + index + 1,
           code: String(offset + index).padStart(4, "0"),
         })),
+        meta: { next: `fixtureCursor${calls}` },
       });
     },
   );
@@ -297,14 +366,82 @@ test("ignored pagination, conflicting codes and an endless catalogue fail withou
   assert.equal(calls, 10);
 });
 
+test("an explicit terminal cursor ends a full page and inactive duplicate codes are ignored", async () => {
+  let calls = 0;
+  const full = Array.from({ length: 100 }, (_, index) => ({
+    ...bank,
+    id: index + 1,
+    code: String(index).padStart(3, "0"),
+  }));
+  const client = new PaystackBankLookupClient(
+    { mode: "sandbox", secretKey },
+    async () => {
+      calls++;
+      return json({ status: true, data: full, meta: { next: null } });
+    },
+  );
+  assert.equal((await client.listNigerianBanks()).length, 100);
+  assert.equal(calls, 1);
+  const inactive = new PaystackBankLookupClient(
+    { mode: "sandbox", secretKey },
+    async () =>
+      json({ status: true, data: [bank, { ...bank, id: 100, active: false }] }),
+  );
+  assert.deepEqual(await inactive.listNigerianBanks(), [
+    { code: bank.code, name: bank.name },
+  ]);
+});
+
+test("malformed or disappearing cursor metadata and excessive catalogue sizes fail closed", async () => {
+  for (const meta of [{}, { next: 123 }, { next: "fixture\ncursor" }]) {
+    const client = new PaystackBankLookupClient(
+      { mode: "sandbox", secretKey },
+      async () => json({ status: true, data: [bank], meta }),
+    );
+    await assert.rejects(client.listNigerianBanks(), fails("invalid_response"));
+  }
+  let calls = 0;
+  const missing = new PaystackBankLookupClient(
+    { mode: "sandbox", secretKey },
+    async () => {
+      calls++;
+      return json({
+        status: true,
+        data: [],
+        ...(calls === 1 ? { meta: { next: "fixtureNext" } } : {}),
+      });
+    },
+  );
+  await assert.rejects(
+    missing.listNigerianBanks(),
+    (error: unknown) =>
+      error instanceof PaystackLookupError &&
+      error.detail === "catalogue_pagination",
+  );
+  const large = Array.from({ length: 1001 }, (_, index) => ({
+    ...bank,
+    id: index + 1,
+    code: String(index).padStart(4, "0"),
+  }));
+  const excessive = new PaystackBankLookupClient(
+    { mode: "sandbox", secretKey },
+    async () => json({ status: true, data: large }),
+  );
+  await assert.rejects(
+    excessive.listNigerianBanks(),
+    (error: unknown) =>
+      error instanceof PaystackLookupError && error.detail === "catalogue_size",
+  );
+});
+
 test("malformed, oversized and redirected responses are refused", async () => {
   const factories = [
     () => json({ status: false, message: secretKey }),
     () => new Response("not JSON"),
-    () => new Response("x".repeat(256 * 1024 + 1)),
+    () => new Response("x".repeat(1024 * 1024 + 1)),
     () =>
       new Response("{}", {
-        headers: { "Content-Length": String(256 * 1024 + 1) },
+        headers: { "Content-Length": String(1024 * 1024 + 1) },
       }),
     () => {
       const response = json({ status: true, data: [bank] });
@@ -511,5 +648,32 @@ test("staging connection failures are nonfatal and log sanitized configuration o
       "private-holder",
     ])
       assert.ok(!warnings[0].includes(privateValue));
+  }
+});
+
+test("catalogue validation diagnostics identify only fixed field names and omit offending values", async () => {
+  for (const [patch, detail] of [
+    [{ code: secretKey }, "catalogue_bank_code"],
+    [{ name: "private-holder\nmalformed" }, "catalogue_bank_name"],
+    [{ active: secretKey }, "catalogue_bank_active"],
+  ] as const) {
+    const warnings: string[] = [];
+    await reportConfiguredPaystackBankAccess(
+      { PAYSTACK_MODE: "sandbox", PAYSTACK_SECRET_KEY: secretKey },
+      {
+        info: () => assert.fail("malformed data must not report success"),
+        warn: (line: string) => warnings.push(line),
+      },
+      async () => json({ status: true, data: [{ ...bank, ...patch }] }),
+    );
+    assert.equal(warnings.length, 1);
+    assert.ok(warnings[0].includes(`invalid_response: ${detail}`));
+    for (const value of [
+      secretKey,
+      "private-holder",
+      bank.name,
+      account.accountNumber,
+    ])
+      assert.ok(!warnings[0].includes(value));
   }
 });
