@@ -5,7 +5,10 @@ import {
   PaystackBankLookupClient,
   PaystackLookupError,
 } from "../src/providers/paystack.client";
-import { checkPaystackBankAccess } from "../src/check-paystack";
+import {
+  checkPaystackBankAccess,
+  reportConfiguredPaystackBankAccess,
+} from "../src/check-paystack";
 
 const secretKey = "sk_test_" + "f".repeat(40);
 const bank = {
@@ -412,4 +415,101 @@ test("owner preflight reports only catalogue metadata and leaves ownership verif
     ),
     fails("invalid_response"),
   );
+});
+
+test("staging connection diagnostics skip an unconfigured Paystack integration", async () => {
+  const logs: string[] = [];
+  let calls = 0;
+  await reportConfiguredPaystackBankAccess(
+    {},
+    {
+      info: (line: string) => logs.push(line),
+      warn: (line: string) => logs.push(line),
+    },
+    async () => {
+      calls++;
+      throw new Error("must not request");
+    },
+  );
+  assert.equal(calls, 0);
+  assert.deepEqual(logs, []);
+});
+
+test("staging connection success logs only catalogue metadata, never names, credentials or ownership approval", async () => {
+  const messages: string[] = [];
+  const warnings: string[] = [];
+  await reportConfiguredPaystackBankAccess(
+    { PAYSTACK_MODE: "sandbox", PAYSTACK_SECRET_KEY: secretKey },
+    {
+      info: (line: string) => messages.push(line),
+      warn: (line: string) => warnings.push(line),
+    },
+    async () => json({ status: true, data: [bank] }),
+  );
+  assert.equal(messages.length, 1);
+  assert.ok(messages[0].startsWith("Paystack bank catalogue check: "));
+  assert.deepEqual(JSON.parse(messages[0].slice(messages[0].indexOf("{"))), {
+    catalogueAvailable: true,
+    mode: "sandbox",
+    country: "NG",
+    currency: "NGN",
+    bankCount: 1,
+    ownershipVerificationEnabled: false,
+  });
+  assert.ok(!messages[0].includes(secretKey));
+  assert.ok(!messages[0].includes(bank.name));
+  assert.deepEqual(warnings, []);
+});
+
+test("staging connection failures are nonfatal and log sanitized configuration or provider categories", async () => {
+  const fixtures = [
+    {
+      credentials: { PAYSTACK_MODE: "sandbox" },
+      status: 200,
+      expected: "Check PAYSTACK_MODE",
+    },
+    {
+      credentials: { PAYSTACK_MODE: "live", PAYSTACK_SECRET_KEY: secretKey },
+      status: 200,
+      expected: "matching PAYSTACK_MODE",
+    },
+    {
+      credentials: { PAYSTACK_MODE: "sandbox", PAYSTACK_SECRET_KEY: secretKey },
+      status: 401,
+      expected: "authentication_failed",
+    },
+    {
+      credentials: { PAYSTACK_MODE: "sandbox", PAYSTACK_SECRET_KEY: secretKey },
+      status: 503,
+      expected: "provider_unavailable",
+    },
+  ];
+  for (const fixture of fixtures) {
+    const messages: string[] = [];
+    const warnings: string[] = [];
+    await reportConfiguredPaystackBankAccess(
+      fixture.credentials,
+      {
+        info: (line: string) => messages.push(line),
+        warn: (line: string) => warnings.push(line),
+      },
+      async () =>
+        json(
+          {
+            status: false,
+            message: `${secretKey} ${account.accountNumber} private-holder`,
+          },
+          fixture.status,
+        ),
+    );
+    assert.deepEqual(messages, []);
+    assert.equal(warnings.length, 1);
+    assert.ok(warnings[0].includes(fixture.expected));
+    for (const privateValue of [
+      secretKey,
+      account.accountNumber,
+      "private-holder",
+    ])
+      assert.ok(!warnings[0].includes(privateValue));
+  }
 });
