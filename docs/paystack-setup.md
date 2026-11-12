@@ -2,12 +2,14 @@
 
 The owner selected **Paystack** for Task 3's Nigerian bank integration, replacing Monnify as the working choice. Smile ID remains the identity provider. Nigeria/NGN is the only active launch market; Ghana and Kenya remain deferred.
 
-**Current status:** the server has a read-only Nigerian bank-list and account-name lookup client, with an owner-operated setup check. It is not yet a bank-ownership adapter and is not connected to customer bank approvals. The owner reports creating a Test Mode account and saving `PAYSTACK_MODE` and `PAYSTACK_SECRET_KEY` on Render. Supplied logs confirm staging is live. After the first parser correction, the owner supplied `invalid_response: catalogue_duplicate_code`, demonstrating that a catalogue page passed its shape checks but included repeated active codes. The duplicate-handling follow-up awaits deployed confirmation. A completed catalogue check remains unverified. No payment, transfer, subscription or production capability was activated.
+**Current status:** the owner supplied a successful deployed catalogue result: `catalogueAvailable: true`, `mode: sandbox`, `country: NG`, `currency: NGN`, `bankCount: 287`, `duplicateEntryCount: 5`, `excludedAmbiguousCodeCount: 5`, `ownershipVerificationEnabled: false`. This confirms the catalogue check after PR #15. Account resolution and full bank ownership verification still need actual provider-backed acceptance evidence. No payment, transfer, subscription or production capability was activated.
+
+**Owner decision: no BVN collection.** Do not request, add a customer field for, store or submit BVN in Zetmond's bank-verification flow. The documented `POST /customer/{code}/identification` operation requires BVN and remains unavailable under this decision. Keep Paystack's read-only catalogue and account-name lookup; select and verify a supported method without BVN before enabling ownership approval. The required field in the vendor specification is a compatibility limitation, not permission to collect it.
 
 ## Create the account
 
 1. Open [Paystack signup](https://dashboard.paystack.com/#/signup), create the business account and complete its requested verification steps.
-2. Open the dashboard in **Test Mode**. Confirm which Nigerian account-resolution and customer-validation features are available for that account, and use Paystack's documented test fixtures.
+2. Open the dashboard in **Test Mode**. Confirm Nigerian account-resolution access and use Paystack's documented test fixtures. BVN-dependent customer validation remains outside the approved flow.
 3. Obtain the **test secret key** through the dashboard's API-key settings. Keep it private. The API server needs a secret beginning with `sk_test_`; a `pk_test_` public key cannot authenticate these server requests. Dashboard labels may change.
 4. Confirm with Paystack whether its services and agreement support Zetmond's disclosed custodial USDT wallet and P2P marketplace, including the intended bank-verification use. Record actual feature availability and pricing; account creation does not establish eligibility or a free verification allowance.
 
@@ -68,7 +70,7 @@ The client uses Paystack's [official OpenAPI repository at `07c5abc`](https://gi
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /bank`                            | Request Nigeria, NGN and NUBAN with cursor pagination; follow explicit `meta.next` when supplied and accept the published data-only response; keep only active, non-deleted Nigerian entries |
 | `GET /bank/resolve`                    | Server-only account-name lookup; preserve leading zeros; check the returned account number and bank ID against the requested destination and current catalogue                               |
-| `POST /customer/{code}/identification` | **Not called.** The source documents a BVN/bank-account identity check, but its HTTP 202 response only acknowledges acceptance                                                               |
+| `POST /customer/{code}/identification` | **Not called or enabled.** It requires BVN, which the owner declined to collect; its HTTP 202 response would only acknowledge acceptance                                                     |
 
 Account and bank codes stay strings in Zetmond and in query parameters. Bank codes may contain letters and retain leading zeros; customer account numbers remain exactly ten digits. The source annotates resolution query values as integers; converting them to JavaScript numbers would discard meaningful leading zeros or reject letter-suffixed bank codes. Successful lookup responses must still return the exact requested account number. No vendor SDK or dependency was added.
 
@@ -76,16 +78,16 @@ The original client treated `perPage=100` as a maximum valid response size while
 
 Repeated eligible records with the same code, provider ID and parsed name collapse into one listing, including repeats across cursor pages. If a code has conflicting provider IDs or names, it is excluded for the entire collected catalogue; later rows cannot restore it. Other unambiguous banks remain available. The owner check reports only aggregate counts, with no bank labels, codes or IDs. Attempting account resolution against an excluded code fails before requesting `/bank/resolve`. For an available code, the returned account number and single provider bank ID must still match exactly. The client never chooses between conflicting records or combines their IDs into an ownership approval.
 
-The native transport uses server-only bearer authentication, validates bounded JSON, cancels timed-out requests, rejects redirects and returns sanitized failures. It retries no requests automatically. This does not establish Paystack's actual test-mode response behavior; account-backed checks remain necessary.
+The native transport uses server-only bearer authentication, validates bounded JSON, cancels timed-out requests, rejects redirects and returns sanitized failures. It retries no requests automatically. The owner-supplied result establishes catalogue access only; account-resolution and ownership checks remain unproven.
 
 ## Complete the ownership integration
 
-Before connecting Paystack to the existing `/banks` approval flow:
+Before connecting an ownership provider to the existing `/banks` approval flow:
 
-1. Obtain the current **customer identification** result and webhook contracts, including authentication, canonical status recovery and exact customer/bank-account correlation. A generic customer `identified` flag or an accepted request is insufficient evidence for a particular destination.
-2. Confirm the required BVN/customer fields, consent and retention rules. BVN collection is not added by this change and must never be invented from a document number or typed name.
+1. Select a documented ownership method without BVN, then obtain its authenticated result, recovery and event contracts with exact customer/bank-account correlation. The inspected Paystack customer-identification request is incompatible with the no-BVN decision; neither a generic customer `identified` flag nor an accepted request proves a particular destination.
+2. Confirm that the proposed customer fields, consent and data handling comply with the no-BVN decision. Do not infer, derive or request BVN from an identity document or typed name. A provider's masked success webhook does not establish the full account/operation binding by itself.
 3. Implement durable create/recover handling for the persisted operation, safe retries after uncertain outcomes, authenticated events and the provider's documented reconciliation rules. Preserve current MFA, encrypted details, destination fingerprint, KYC revision and matching-policy pins.
 4. Demonstrate actual Test Mode approval, mismatch/rejection, duplicate and missing-event recovery, account/identity changes and unsupported-country rejection. A resolved name alone cannot satisfy these checks.
 5. Register the adapter only after its evidence meets the existing ownership contract. Retain staging financial denial and the separate production launch requirements.
 
-The account-setup step can proceed while code and contract work continue. Task 3 still also needs a completed Smile ID document/liveness/callback journey and bank-provider acceptance evidence.
+The next independent acceptance step is a completed Smile ID sandbox document/liveness/callback journey at the customer app's `/identity` page. Use the existing deployed flow and report its final status without sharing documents or identifiers in chat. Task 3 remains open until this journey and a supported bank ownership method without BVN have acceptance evidence.
