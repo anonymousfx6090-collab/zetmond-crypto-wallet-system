@@ -3,7 +3,9 @@ import { ConfigurationError } from "../config";
 
 const apiOrigin = "https://api.paystack.co";
 const pageSize = 100;
-const responseLimit = 256 * 1024;
+const catalogueLimit = 1000;
+const responseLimit = 1024 * 1024;
+const bankCodeSchema = z.string().regex(/^[a-zA-Z0-9]{1,80}$/);
 const label = z
   .string()
   .trim()
@@ -12,7 +14,7 @@ const label = z
   .refine((v) => !/[\p{Cc}\p{Cf}]/u.test(v));
 const bankSchema = z.object({
   id: z.number().int().positive().safe(),
-  code: z.string().regex(/^\d{3,10}$/),
+  code: bankCodeSchema,
   name: label,
   country: z.string().max(100),
   currency: z.string().max(10),
@@ -22,7 +24,18 @@ const bankSchema = z.object({
 });
 const catalogueSchema = z.object({
   status: z.literal(true),
-  data: z.array(bankSchema).max(pageSize),
+  data: z.array(bankSchema).max(catalogueLimit),
+  meta: z
+    .object({
+      next: z
+        .string()
+        .max(2048)
+        .refine((v) => !/[\p{Cc}\p{Cf}]/u.test(v))
+        .nullable()
+        .optional(),
+    })
+    .nullable()
+    .optional(),
 });
 const resolutionSchema = z.object({
   status: z.literal(true),
@@ -39,9 +52,36 @@ export type PaystackLookupFailure =
   | "authentication_failed"
   | "provider_unavailable"
   | "invalid_response";
+const catalogueFields = {
+  id: "catalogue_bank_id",
+  code: "catalogue_bank_code",
+  name: "catalogue_bank_name",
+  country: "catalogue_bank_country",
+  currency: "catalogue_bank_currency",
+  type: "catalogue_bank_type",
+  active: "catalogue_bank_active",
+  is_deleted: "catalogue_bank_deleted",
+} as const;
+type FailureDetail =
+  | (typeof catalogueFields)[keyof typeof catalogueFields]
+  | "response_envelope"
+  | "response_size"
+  | "response_json"
+  | "catalogue_shape"
+  | "catalogue_size"
+  | "catalogue_duplicate_code"
+  | "catalogue_pagination"
+  | "catalogue_cursor_repeated"
+  | "catalogue_page_limit"
+  | "account_resolution";
 export class PaystackLookupError extends Error {
-  constructor(readonly code: PaystackLookupFailure) {
-    super(`Paystack bank lookup failed (${code}).`);
+  constructor(
+    readonly code: PaystackLookupFailure,
+    readonly detail?: FailureDetail,
+  ) {
+    super(
+      `Paystack bank lookup failed (${code}${detail ? `: ${detail}` : ""}).`,
+    );
     this.name = "PaystackLookupError";
   }
 }
@@ -116,13 +156,13 @@ export class PaystackBankLookupClient {
         (response.url && response.url !== url) ||
         !response.body
       )
-        throw new PaystackLookupError("invalid_response");
+        throw new PaystackLookupError("invalid_response", "response_envelope");
       const contentLength = response.headers.get("content-length");
       if (
         contentLength &&
         (!/^\d+$/.test(contentLength) || Number(contentLength) > responseLimit)
       )
-        throw new PaystackLookupError("invalid_response");
+        throw new PaystackLookupError("invalid_response", "response_size");
       reader = response.body.getReader();
       const chunks: Uint8Array[] = [];
       let size = 0;
@@ -131,7 +171,7 @@ export class PaystackBankLookupClient {
         if (chunk.done) break;
         size += chunk.value.byteLength;
         if (size > responseLimit)
-          throw new PaystackLookupError("invalid_response");
+          throw new PaystackLookupError("invalid_response", "response_size");
         chunks.push(chunk.value);
       }
       if (controller.signal.aborted)
@@ -139,7 +179,7 @@ export class PaystackBankLookupClient {
       try {
         return JSON.parse(Buffer.concat(chunks).toString("utf8"));
       } catch {
-        throw new PaystackLookupError("invalid_response");
+        throw new PaystackLookupError("invalid_response", "response_json");
       }
     } catch (error) {
       // Provider errors can contain keys, bank numbers, names or request URLs.
@@ -157,37 +197,72 @@ export class PaystackBankLookupClient {
   }
   private async catalogue(): Promise<Bank[]> {
     const selected = new Map<string, Bank>();
-    const allSeen = new Set<string>();
+    const cursors = new Set<string>();
+    let cursor: string | undefined;
+    let rowsSeen = 0;
     for (let page = 1; page <= 10; page++) {
       const query = new URLSearchParams({
         country: "nigeria",
         currency: "NGN",
         type: "nuban",
-        use_cursor: "false",
+        use_cursor: "true",
         perPage: String(pageSize),
-        page: String(page),
       });
+      if (cursor) query.set("next", cursor);
       const result = catalogueSchema.safeParse(
         await this.request("/bank", query),
       );
-      if (!result.success) throw new PaystackLookupError("invalid_response");
+      if (!result.success) {
+        const issue = result.error.issues[0];
+        const field = issue.path[0] === "data" ? issue.path[2] : undefined;
+        const detail: FailureDetail =
+          typeof field === "string" && Object.hasOwn(catalogueFields, field)
+            ? catalogueFields[field as keyof typeof catalogueFields]
+            : issue.code === "too_big" &&
+                issue.path.length === 1 &&
+                issue.path[0] === "data"
+              ? "catalogue_size"
+              : "catalogue_shape";
+        throw new PaystackLookupError("invalid_response", detail);
+      }
+      rowsSeen += result.data.data.length;
+      if (rowsSeen > catalogueLimit)
+        throw new PaystackLookupError("invalid_response", "catalogue_size");
       for (const bank of result.data.data) {
-        // Repeated codes indicate ignored or inconsistent pagination; never silently truncate.
-        if (allSeen.has(bank.code))
-          throw new PaystackLookupError("invalid_response");
-        allSeen.add(bank.code);
         if (
           bank.country.toLowerCase() === "nigeria" &&
           bank.currency === "NGN" &&
           bank.type === "nuban" &&
           bank.active &&
           !bank.is_deleted
-        )
+        ) {
+          if (selected.has(bank.code))
+            throw new PaystackLookupError(
+              "invalid_response",
+              "catalogue_duplicate_code",
+            );
           selected.set(bank.code, bank);
+        }
       }
-      if (result.data.data.length < pageSize) return [...selected.values()];
+      const meta = result.data.meta;
+      if ((meta && !Object.hasOwn(meta, "next")) || (cursor && !meta))
+        throw new PaystackLookupError(
+          "invalid_response",
+          "catalogue_pagination",
+        );
+      const next = meta?.next;
+      // The published response schema also permits a full, data-only catalogue.
+      // Its size is not proof of another page; only an explicit cursor advances it.
+      if (!next) return [...selected.values()];
+      if (cursors.has(next))
+        throw new PaystackLookupError(
+          "invalid_response",
+          "catalogue_cursor_repeated",
+        );
+      cursors.add(next);
+      cursor = next;
     }
-    throw new PaystackLookupError("invalid_response");
+    throw new PaystackLookupError("invalid_response", "catalogue_page_limit");
   }
   async listNigerianBanks(): Promise<{ code: string; name: string }[]> {
     return (await this.catalogue()).map(({ code, name }) => ({ code, name }));
@@ -202,7 +277,7 @@ export class PaystackBankLookupClient {
   }> {
     const parsed = z
       .object({
-        bankCode: z.string().regex(/^\d{3,10}$/),
+        bankCode: bankCodeSchema,
         accountNumber: z.string().regex(/^\d{10}$/),
       })
       .strict()
@@ -224,7 +299,7 @@ export class PaystackBankLookupClient {
       result.data.data.account_number !== parsed.data.accountNumber ||
       result.data.data.bank_id !== bank.id
     )
-      throw new PaystackLookupError("invalid_response");
+      throw new PaystackLookupError("invalid_response", "account_resolution");
     return {
       bankCode: bank.code,
       accountNumber: result.data.data.account_number,

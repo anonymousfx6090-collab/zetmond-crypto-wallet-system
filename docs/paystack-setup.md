@@ -2,7 +2,7 @@
 
 The owner selected **Paystack** for Task 3's Nigerian bank integration, replacing Monnify as the working choice. Smile ID remains the identity provider. Nigeria/NGN is the only active launch market; Ghana and Kenya remain deferred.
 
-**Current status:** the server has a read-only Nigerian bank-list and account-name lookup client, with an owner-operated setup check. It is not yet a bank-ownership adapter and is not connected to customer bank approvals. The owner reports creating a Test Mode account and saving `PAYSTACK_MODE` and `PAYSTACK_SECRET_KEY` on Render. Actual provider connectivity remains unverified. No payment, transfer, subscription or production capability was activated.
+**Current status:** the server has a read-only Nigerian bank-list and account-name lookup client, with an owner-operated setup check. It is not yet a bank-ownership adapter and is not connected to customer bank approvals. The owner reports creating a Test Mode account and saving `PAYSTACK_MODE` and `PAYSTACK_SECRET_KEY` on Render. Supplied logs confirm commit `b56977e` built, migrated and started in staging; its catalogue check returned `invalid_response`. The parser follow-up removes unsupported 100-entry/digits-only assumptions and awaits deployed confirmation. Successful catalogue access remains unverified. No payment, transfer, subscription or production capability was activated.
 
 ## Create the account
 
@@ -35,6 +35,7 @@ In **Render → zetmond-wallet → Logs**, search for **`Paystack bank catalogue
 - A successful line includes `catalogueAvailable: true`, `mode: sandbox`, `country: NG`, a bank count and `ownershipVerificationEnabled: false`. The disabled ownership flag is expected.
 - `authentication_failed` means Paystack returned HTTP 401 or 403; confirm the test secret and account's API access.
 - `provider_unavailable` means the provider request failed, timed out or returned another non-200 status. `invalid_response` means its response failed the contract checks.
+- The parser follow-up adds a fixed reason after `invalid_response`, such as `catalogue_bank_code`, `catalogue_shape`, `response_size` or `catalogue_cursor_repeated`. These are local diagnostic labels, never raw provider values. They help distinguish a field mismatch from an unreadable, oversized or inconsistent response.
 - A configuration message names the fields to check without showing their values.
 
 The diagnostic logs metadata and safe categories only. It never requests a customer account lookup or logs keys, holder names, BVNs, bank account numbers, raw provider errors or response bodies. Share only this safe diagnostic line for follow-up. A success does not establish account-resolution entitlement or completed ownership verification.
@@ -62,13 +63,15 @@ A successful check prints only mode, country, currency, bank count, `catalogueAv
 
 The client uses Paystack's [official OpenAPI repository at `07c5abc`](https://github.com/PaystackOSS/openapi/tree/07c5abc8c34536e98a7755a5338178b4f430b09b). A [pinned contract extract](contracts/paystack-bank-lookups.openapi.json) and its [MIT license](contracts/paystack-openapi.LICENSE) are saved for review. The published website documentation was blocked by the workspace network policy; the public official GitHub specification was accessible.
 
-| Operation                              | Implemented behavior                                                                                                                                           |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /bank`                            | Request Nigeria, NGN and NUBAN; collect bounded offset pages; reject inconsistent pagination; keep only active, non-deleted Nigerian entries                   |
-| `GET /bank/resolve`                    | Server-only account-name lookup; preserve leading zeros; check the returned account number and bank ID against the requested destination and current catalogue |
-| `POST /customer/{code}/identification` | **Not called.** The source documents a BVN/bank-account identity check, but its HTTP 202 response only acknowledges acceptance                                 |
+| Operation                              | Implemented behavior                                                                                                                                                                         |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /bank`                            | Request Nigeria, NGN and NUBAN with cursor pagination; follow explicit `meta.next` when supplied and accept the published data-only response; keep only active, non-deleted Nigerian entries |
+| `GET /bank/resolve`                    | Server-only account-name lookup; preserve leading zeros; check the returned account number and bank ID against the requested destination and current catalogue                               |
+| `POST /customer/{code}/identification` | **Not called.** The source documents a BVN/bank-account identity check, but its HTTP 202 response only acknowledges acceptance                                                               |
 
-Account and bank codes stay strings in Zetmond and in query parameters. The source annotates resolution query values as integers; converting them to JavaScript numbers would discard meaningful leading zeros. Successful lookup responses must still return the exact requested ten-digit account number. No vendor SDK or dependency was added.
+Account and bank codes stay strings in Zetmond and in query parameters. Bank codes may contain letters and retain leading zeros; customer account numbers remain exactly ten digits. The source annotates resolution query values as integers; converting them to JavaScript numbers would discard meaningful leading zeros or reject letter-suffixed bank codes. Successful lookup responses must still return the exact requested account number. No vendor SDK or dependency was added.
+
+The original client treated `perPage=100` as a maximum valid response size while disabling cursors, and required digit-only bank codes. Neither restriction is part of the pinned bank response schema: it defines an array without that page-size maximum and string bank codes. A synthetic 150-entry catalogue reproduced `invalid_response` before the correction. The corrected client follows explicit cursors instead of guessing offset pages and supports data-only responses independently of the requested page size. Optional `meta.next` is a compatibility extension; the pinned response schema itself does not specify cursor metadata. A missing cursor on a later cursor page, repeated cursor, duplicate active code or exhausted page budget still fails without returning partial success. Bounds remain: 1 MiB per response, 1,000 catalogue records and ten pages. These are local resource limits, not claims about Paystack's catalogue size.
 
 The native transport uses server-only bearer authentication, validates bounded JSON, cancels timed-out requests, rejects redirects and returns sanitized failures. It retries no requests automatically. This does not establish Paystack's actual test-mode response behavior; account-backed checks remain necessary.
 
