@@ -319,7 +319,26 @@ test("cursor pagination follows provider cursors without guessing offset pages",
   assert.deepEqual(pages, [null, next]);
 });
 
-test("duplicate active codes, repeated cursors and endless pagination never return partial success", async () => {
+test("identical repeated bank records collapse without blocking an otherwise valid catalogue", async () => {
+  const client = new PaystackBankLookupClient(
+    { mode: "sandbox", secretKey },
+    async () =>
+      json({
+        status: true,
+        data: [
+          bank,
+          { ...bank },
+          { ...bank, id: 10, code: "008", name: "Other Fixture Bank" },
+        ],
+      }),
+  );
+  assert.deepEqual(await client.listNigerianBanks(), [
+    { code: bank.code, name: bank.name },
+    { code: "008", name: "Other Fixture Bank" },
+  ]);
+});
+
+test("ambiguous codes remain unusable and incomplete pagination never returns partial success", async () => {
   const full = Array.from({ length: 100 }, (_, index) => ({
     ...bank,
     id: index + 1,
@@ -333,7 +352,7 @@ test("duplicate active codes, repeated cursors and endless pagination never retu
       return json({ status: true, data: [bank, { ...bank, id: 100 }] });
     },
   );
-  await assert.rejects(repeated.listNigerianBanks(), fails("invalid_response"));
+  assert.deepEqual(await repeated.listNigerianBanks(), []);
   assert.equal(calls, 1);
   const cursor = new PaystackBankLookupClient(
     { mode: "sandbox", secretKey },
@@ -364,6 +383,111 @@ test("duplicate active codes, repeated cursors and endless pagination never retu
   );
   await assert.rejects(endless.listNigerianBanks(), fails("invalid_response"));
   assert.equal(calls, 10);
+});
+
+test("conflicting IDs or names exclude only that code, regardless of order, and cannot be resurrected", async () => {
+  const unaffected = {
+    ...bank,
+    id: 100,
+    code: "008",
+    name: "Unaffected Fixture Bank",
+  };
+  for (const conflict of [
+    { ...bank, id: 99 },
+    { ...bank, name: "Conflicting Fixture Bank" },
+  ]) {
+    for (const ordered of [
+      [bank, conflict],
+      [conflict, bank],
+    ]) {
+      let resolutions = 0;
+      const client = new PaystackBankLookupClient(
+        { mode: "sandbox", secretKey },
+        async (url) => {
+          const request = new URL(String(url));
+          if (request.pathname === "/bank")
+            return json({ status: true, data: [...ordered, bank, unaffected] });
+          resolutions++;
+          assert.equal(request.searchParams.get("bank_code"), unaffected.code);
+          return json({
+            status: true,
+            data: {
+              account_number: account.accountNumber,
+              account_name: "Fixture Holder",
+              bank_id: unaffected.id,
+            },
+          });
+        },
+      );
+      assert.deepEqual(await client.listNigerianBanks(), [
+        { code: unaffected.code, name: unaffected.name },
+      ]);
+      assert.deepEqual(await client.getNigerianBankCatalogueSummary(), {
+        bankCount: 1,
+        duplicateEntryCount: 2,
+        excludedAmbiguousCodeCount: 1,
+      });
+      await assert.rejects(
+        client.resolveNigerianAccount(account),
+        fails("invalid_request"),
+      );
+      assert.equal(resolutions, 0);
+      assert.deepEqual(
+        await client.resolveNigerianAccount({
+          ...account,
+          bankCode: unaffected.code,
+        }),
+        {
+          ...account,
+          bankCode: unaffected.code,
+          accountName: "Fixture Holder",
+        },
+      );
+      assert.equal(resolutions, 1);
+    }
+  }
+});
+
+test("identical repeats across cursor pages retain exact account-to-bank-ID validation", async () => {
+  for (const bankId of [bank.id, 99]) {
+    const paths: string[] = [];
+    const client = new PaystackBankLookupClient(
+      { mode: "sandbox", secretKey },
+      async (url) => {
+        const request = new URL(String(url));
+        paths.push(request.pathname);
+        if (request.pathname === "/bank")
+          return json({
+            status: true,
+            data: [bank],
+            meta: {
+              next: request.searchParams.has("next") ? null : "fixtureNext",
+            },
+          });
+        return json({
+          status: true,
+          data: {
+            account_number: account.accountNumber,
+            account_name: "Fixture Holder",
+            bank_id: bankId,
+          },
+        });
+      },
+    );
+    if (bankId === bank.id)
+      assert.deepEqual(await client.resolveNigerianAccount(account), {
+        ...account,
+        accountName: "Fixture Holder",
+      });
+    else
+      await assert.rejects(
+        client.resolveNigerianAccount(account),
+        (error: unknown) =>
+          error instanceof PaystackLookupError &&
+          error.detail === "account_resolution",
+      );
+    assert.deepEqual(paths, ["/bank", "/bank", "/bank/resolve"]);
+  }
 });
 
 test("an explicit terminal cursor ends a full page and inactive duplicate codes are ignored", async () => {
@@ -542,6 +666,8 @@ test("owner preflight reports only catalogue metadata and leaves ownership verif
     country: "NG",
     currency: "NGN",
     bankCount: 1,
+    duplicateEntryCount: 0,
+    excludedAmbiguousCodeCount: 0,
     ownershipVerificationEnabled: false,
   });
   assert.ok(!JSON.stringify(result).includes(secretKey));
@@ -591,6 +717,8 @@ test("staging connection success logs only catalogue metadata, never names, cred
     country: "NG",
     currency: "NGN",
     bankCount: 1,
+    duplicateEntryCount: 0,
+    excludedAmbiguousCodeCount: 0,
     ownershipVerificationEnabled: false,
   });
   assert.ok(!messages[0].includes(secretKey));
@@ -676,4 +804,58 @@ test("catalogue validation diagnostics identify only fixed field names and omit 
     ])
       assert.ok(!warnings[0].includes(value));
   }
+});
+
+test("preflight reports only aggregate duplicate counts and cannot succeed with no unambiguous banks", async () => {
+  const messages: string[] = [];
+  const warnings: string[] = [];
+  const conflicting = { ...bank, id: 99, name: "Conflicting Fixture Bank" };
+  const unaffected = {
+    ...bank,
+    id: 100,
+    code: "008",
+    name: "Unaffected Fixture Bank",
+  };
+  const log = {
+    info: (line: string) => messages.push(line),
+    warn: (line: string) => warnings.push(line),
+  };
+  const env = { PAYSTACK_MODE: "sandbox", PAYSTACK_SECRET_KEY: secretKey };
+  await reportConfiguredPaystackBankAccess(env, log, async () =>
+    json({ status: true, data: [bank, conflicting, unaffected] }),
+  );
+  assert.equal(messages.length, 1);
+  assert.deepEqual(JSON.parse(messages[0].slice(messages[0].indexOf("{"))), {
+    catalogueAvailable: true,
+    mode: "sandbox",
+    country: "NG",
+    currency: "NGN",
+    bankCount: 1,
+    duplicateEntryCount: 1,
+    excludedAmbiguousCodeCount: 1,
+    ownershipVerificationEnabled: false,
+  });
+  assert.deepEqual(warnings, []);
+  for (const value of [
+    secretKey,
+    bank.name,
+    conflicting.name,
+    unaffected.name,
+    account.accountNumber,
+  ])
+    assert.ok(!messages[0].includes(value));
+  const onlyConflicts: typeof fetch = async () =>
+    json({ status: true, data: [bank, conflicting] });
+  await assert.rejects(
+    checkPaystackBankAccess(env, onlyConflicts),
+    (error: unknown) =>
+      error instanceof PaystackLookupError &&
+      error.detail === "catalogue_no_usable_banks",
+  );
+  await reportConfiguredPaystackBankAccess(env, log, onlyConflicts);
+  assert.equal(messages.length, 1);
+  assert.equal(warnings.length, 1);
+  assert.ok(warnings[0].includes("catalogue_no_usable_banks"));
+  assert.ok(!warnings[0].includes(bank.name));
+  assert.ok(!warnings[0].includes(secretKey));
 });

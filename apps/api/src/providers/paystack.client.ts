@@ -46,6 +46,11 @@ const resolutionSchema = z.object({
   }),
 });
 type Bank = z.infer<typeof bankSchema>;
+type Catalogue = {
+  banks: Bank[];
+  duplicateEntryCount: number;
+  excludedAmbiguousCodeCount: number;
+};
 export type PaystackMode = "sandbox" | "live";
 export type PaystackLookupFailure =
   | "invalid_request"
@@ -69,7 +74,7 @@ type FailureDetail =
   | "response_json"
   | "catalogue_shape"
   | "catalogue_size"
-  | "catalogue_duplicate_code"
+  | "catalogue_no_usable_banks"
   | "catalogue_pagination"
   | "catalogue_cursor_repeated"
   | "catalogue_page_limit"
@@ -195,8 +200,10 @@ export class PaystackBankLookupClient {
       reader?.releaseLock();
     }
   }
-  private async catalogue(): Promise<Bank[]> {
+  private async catalogue(): Promise<Catalogue> {
     const selected = new Map<string, Bank>();
+    const ambiguousCodes = new Set<string>();
+    let duplicateEntryCount = 0;
     const cursors = new Set<string>();
     let cursor: string | undefined;
     let rowsSeen = 0;
@@ -236,11 +243,21 @@ export class PaystackBankLookupClient {
           bank.active &&
           !bank.is_deleted
         ) {
-          if (selected.has(bank.code))
-            throw new PaystackLookupError(
-              "invalid_response",
-              "catalogue_duplicate_code",
-            );
+          if (ambiguousCodes.has(bank.code)) {
+            duplicateEntryCount++;
+            continue;
+          }
+          const existing = selected.get(bank.code);
+          if (existing) {
+            duplicateEntryCount++;
+            // Matching ID and label identify a repeated record. A conflicting
+            // code stays excluded for this entire catalogue, regardless of order.
+            if (existing.id !== bank.id || existing.name !== bank.name) {
+              selected.delete(bank.code);
+              ambiguousCodes.add(bank.code);
+            }
+            continue;
+          }
           selected.set(bank.code, bank);
         }
       }
@@ -253,7 +270,12 @@ export class PaystackBankLookupClient {
       const next = meta?.next;
       // The published response schema also permits a full, data-only catalogue.
       // Its size is not proof of another page; only an explicit cursor advances it.
-      if (!next) return [...selected.values()];
+      if (!next)
+        return {
+          banks: [...selected.values()],
+          duplicateEntryCount,
+          excludedAmbiguousCodeCount: ambiguousCodes.size,
+        };
       if (cursors.has(next))
         throw new PaystackLookupError(
           "invalid_response",
@@ -265,7 +287,18 @@ export class PaystackBankLookupClient {
     throw new PaystackLookupError("invalid_response", "catalogue_page_limit");
   }
   async listNigerianBanks(): Promise<{ code: string; name: string }[]> {
-    return (await this.catalogue()).map(({ code, name }) => ({ code, name }));
+    return (await this.catalogue()).banks.map(({ code, name }) => ({
+      code,
+      name,
+    }));
+  }
+  async getNigerianBankCatalogueSummary(): Promise<{
+    bankCount: number;
+    duplicateEntryCount: number;
+    excludedAmbiguousCodeCount: number;
+  }> {
+    const { banks, ...summary } = await this.catalogue();
+    return { bankCount: banks.length, ...summary };
   }
   async resolveNigerianAccount(input: {
     bankCode: string;
@@ -283,7 +316,7 @@ export class PaystackBankLookupClient {
       .strict()
       .safeParse(input);
     if (!parsed.success) throw new PaystackLookupError("invalid_request");
-    const bank = (await this.catalogue()).find(
+    const bank = (await this.catalogue()).banks.find(
       (v) => v.code === parsed.data.bankCode,
     );
     if (!bank) throw new PaystackLookupError("invalid_request");
