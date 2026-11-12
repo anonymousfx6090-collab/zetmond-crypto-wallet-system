@@ -27,14 +27,18 @@ export async function checkPaystackBankAccess(
     },
     transport,
   );
-  const banks = await client.listNigerianBanks();
-  if (!banks.length) throw new PaystackLookupError("invalid_response");
+  const summary = await client.getNigerianBankCatalogueSummary();
+  if (!summary.bankCount)
+    throw new PaystackLookupError(
+      "invalid_response",
+      "catalogue_no_usable_banks",
+    );
   return {
     catalogueAvailable: true as const,
     mode: client.mode,
     country: "NG",
     currency: "NGN",
-    bankCount: banks.length,
+    ...summary,
     ownershipVerificationEnabled: false as const,
   };
 }
