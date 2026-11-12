@@ -11,7 +11,8 @@
     "test": "tsx --test --test-concurrency=1 test/*.test.ts",
     "delivery:local": "tsx --env-file-if-exists=.env src/read-local-message.ts",
     "worker:verification": "node dist/worker.js",
-    "smile:check": "node dist/check-smile-id.js"
+    "smile:check": "node dist/check-smile-id.js",
+    "paystack:check": "node dist/check-paystack.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",
