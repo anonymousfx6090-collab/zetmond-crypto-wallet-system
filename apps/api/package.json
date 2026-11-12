@@ -12,7 +12,9 @@
     "delivery:local": "tsx --env-file-if-exists=.env src/read-local-message.ts",
     "worker:verification": "node dist/worker.js",
     "smile:check": "node dist/check-smile-id.js",
-    "paystack:check": "node dist/check-paystack.js"
+    "paystack:check": "node dist/check-paystack.js",
+    "ledger:check": "node dist/check-ledger.js",
+    "worker:financial": "node dist/financial-worker.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",
