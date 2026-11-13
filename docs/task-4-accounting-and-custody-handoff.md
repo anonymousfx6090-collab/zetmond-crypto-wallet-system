@@ -2,6 +2,8 @@
 
 **Accounting foundation implemented; Task 4 remains open for real custody acceptance.** No live asset, customer funds, deposit address, custody credential or private key is created. The API still returns disabled financial capabilities. Staging financial denial remains active.
 
+The foundation was merged through PR #17. The [TRON validation continuation](task-4-tron-validation.md) adds offline native transaction/signature verification for the future adapter; it does not enable custody or replace real sandbox acceptance.
+
 Nigeria/NGN is the active market. Ghana and Kenya remain deferred; South Africa is removed. The no-BVN decision remains in force. Task 3 still needs actual Smile ID acceptance and an approved bank-ownership method without BVN. Customer wallet screens follow in Task 5, Vault in Task 9, and the admin portal in Task 10.
 
 ## Delivered

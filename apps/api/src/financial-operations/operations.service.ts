@@ -17,31 +17,8 @@ import {
   assertSignedScope,
 } from "../custody/signing-policy";
 import { LedgerError, LedgerService } from "../ledger/ledger.service";
-
-export const transferDigest = (v: TransferIntent) =>
-  hash(
-    JSON.stringify([
-      "withdrawal-v1",
-      v.id,
-      v.assetId,
-      v.availableId,
-      v.heldId,
-      v.feeAccountId,
-      v.custodyAccountId,
-      v.identityAttemptId,
-      v.identityRevision,
-      v.mode,
-      v.network,
-      v.contract,
-      v.destination,
-      v.keyRef,
-      v.units,
-      v.feeUnits,
-      v.quoteId,
-      v.policyVersion,
-      v.expiresAt,
-    ]),
-  );
+import { transferDigest } from "./intent";
+export { transferDigest } from "./intent";
 async function bounded<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout>;
