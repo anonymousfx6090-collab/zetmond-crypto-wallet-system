@@ -20,6 +20,8 @@ import { VerificationWorker } from "./verification/verification.worker";
 import { VerificationController } from "./verification/verification.controller";
 import { VerificationProvider } from "./providers/verification";
 import { configuredVerificationProviders } from "./providers/registry";
+import { LedgerService } from "./ledger/ledger.service";
+import { FinancialOperations } from "./financial-operations/operations.service";
 @Catch()
 class SafeErrors implements ExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {
@@ -52,6 +54,8 @@ export async function createApp(
     testProviders || configuredVerificationProviders(config, db),
   );
   const verificationWorker = new VerificationWorker(verification);
+  const ledger = new LedgerService(db);
+  const financial = new FinancialOperations(auth);
   @Module({
     controllers: [AuthController, VerificationController],
     providers: [
@@ -138,6 +142,8 @@ export async function createApp(
     delivery,
     verification,
     verificationWorker,
+    ledger,
+    financial,
     async close() {
       await app.close();
       await db.close();

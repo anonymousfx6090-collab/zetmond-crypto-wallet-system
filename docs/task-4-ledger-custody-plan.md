@@ -1,12 +1,12 @@
 # Task 4 — Ledger and custody foundation
 
-**Status: implementation plan.** No ledger, wallet funding or signing capability is enabled by this document. Baseline: merged `main` at `8e7b48a`, plus the owner's no-BVN policy recorded in `f3ea263` and carried on this planning branch.
+**Status: accounting foundation implemented; real custody integration pending.** See the [implementation and operator handoff](task-4-accounting-and-custody-handoff.md) for delivered code, validation and remaining gates. Customer money features remain disabled. Original planning baseline: merged `main` at `8e7b48a`, plus the owner's no-BVN policy recorded in `f3ea263`.
 
 Task 4 follows [PRD v1.1](../Zetmond_Production_Web_App_PRD_Mobile_Desktop_v1.1.md), Task 4 in Section 21.1, Sections 8, 16.3–16.5, 17.3, 18.3 and 19.1/19.5, and decisions O02–O04, O15–O18 and O20. It establishes exact accounting, fund reservations, durable financial operations and protected Zetmond-managed custody. Customer wallet screens follow in **Task 5**, Vault in **Task 9**, and the admin portal in **Task 10**.
 
-## Starting point and boundaries
+## Original starting point and boundaries
 
-The repository already supplies PostgreSQL migrations, authentication, role/session checks, exact-operation MFA, encrypted sensitive records, audit events, provider verification, recoverable database jobs and optional Redis/BullMQ wakeups. There are no financial ledger tables, balance engine, custody adapter or protected signer yet. Migrations currently end at `008`.
+Before Task 4, the repository supplied PostgreSQL migrations, authentication, role/session checks, exact-operation MFA, encrypted sensitive records, audit events, provider verification, recoverable database jobs and optional Redis/BullMQ wakeups. Migrations ended at `008`; no ledger or signer existed. The implementation now adds `009` and `010`, internal accounting/operation services and a custody contract with an unavailable default. A real signer is still outstanding.
 
 Nigeria/NGN is the current market; the customer crypto asset is USDT on TRON/TRC-20. Ghana and Kenya stay deferred. Zetmond remains custodial. Seller-to-Vault funding will be an internal ledger movement; external deposits and withdrawals will use the custody integration.
 
@@ -166,7 +166,7 @@ docs/
   task-4-accounting-and-custody-handoff.md
 ```
 
-These are proposed files, not existing implementation. Recheck the next free migration numbers when implementation starts. Preserve existing migration history, authentication/verification flows and the user's private `.env`. No paid service, custody key or production configuration is created by this plan.
+This is the original proposed layout. The handoff lists the implemented files; related responsibilities are grouped into smaller service modules. Existing migration history, authentication/verification flows and the user's private `.env` are preserved. No paid service, custody key or production configuration is created.
 
 ## Validation matrix
 
